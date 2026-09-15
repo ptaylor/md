@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 292 160" width="292" height="160" role="img" aria-labelledby="md-logo-title">
+  <title id="md-logo-title">md — Markdown in the terminal</title>
+
+  <!--
+    The mark is md's own visual idiom: a rounded panel, as md draws around code,
+    holding a rendered document - a heading bar, text lines, a bullet and a
+    cursor. The wordmark is drawn as paths rather than text so the logo renders
+    identically everywhere, with no font dependency. Colours follow the reader's
+    colour scheme, as md follows the terminal's.
+  -->
+  <style>
+    .frame  { stroke: #c9c9d2; }
+    .text   { fill: #3c3c46; }
+    .mark   { stroke: #3c3c46; }
+    .accent { fill: #2f6fd0; stroke: #2f6fd0; }
+
+    @media (prefers-color-scheme: dark) {
+      .frame  { stroke: #4a4a56; }
+      .text   { fill: #dcdce6; }
+      .mark   { stroke: #dcdce6; }
+      .accent { fill: #7aa2f7; stroke: #7aa2f7; }
+    }
+  </style>
+
+  <!-- Mark: a document as md renders it. -->
+  <g>
+    <rect class="frame" x="24.5" y="28.5" width="103" height="103" rx="24" fill="none" stroke-width="3"/>
+    <rect class="accent" x="46" y="44" width="8" height="26" rx="4"/>
+    <rect class="text" x="62" y="46" width="44" height="8" rx="4" opacity=".8"/>
+    <rect class="text" x="62" y="60" width="26" height="8" rx="4" opacity=".45"/>
+    <circle class="accent" cx="52" cy="86" r="4.5"/>
+    <rect class="text" x="64" y="82" width="40" height="8" rx="4" opacity=".6"/>
+    <rect class="accent" x="46" y="98" width="15" height="11" rx="2"/>
+  </g>
+
+  <!-- Wordmark. -->
+  <g transform="translate(166 38)" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path class="mark" d="M4 56 V39 a11 11 0 0 1 22 0 V56 M26 39 a11 11 0 0 1 22 0 V56"/>
+    <circle class="mark" cx="84" cy="42" r="14"/>
+    <path class="mark" d="M98 56 V14"/>
+  </g>
+</svg>

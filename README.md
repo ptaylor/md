@@ -1,6 +1,17 @@
 # md
 
+<p align="center">
+  <img src="assets/logo.svg" alt="md: a Markdown document rendered in a terminal" width="292" height="160">
+</p>
+
 Render Markdown in the terminal, in the colours you already use.
+
+    ┌───────────┐                ╭───────────╮
+    │ # Title   │     ──▶        │ ▌ Title   │
+    │ > quote   │                │ ▌ quote   │
+    │ - item    │                │ • item    │
+    │ ---       │                │ ───────── │
+    └───────────┘                ╰───────────╯
 
 ```sh
 md README.md
