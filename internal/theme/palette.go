@@ -203,6 +203,39 @@ func (p Palette) Accent() *string {
 	return p.Slot(Magenta)
 }
 
+// CodeSlot picks a syntax colour: the bright tint on a dark theme, the deeper
+// one on a light theme. The halves of a palette are not interchangeable - a dark
+// background swallows the normal half and a light background washes out the
+// bright half - so which of a colour's two forms is legible depends on the
+// background it lands on.
+//
+// Chroma cannot express ANSI colour indices, so this is always an RGB value.
+func (p Palette) CodeSlot(bright, normal int) string {
+	if p.Dark {
+		return p.HexSlot(bright)
+	}
+	return p.HexSlot(normal)
+}
+
+// CodeText returns the colour for code that has no syntax colour of its own.
+// It is the terminal's own foreground when md knows it, and otherwise the slot
+// that stands in for it - white on a dark theme, black on a light one - so that
+// code never disappears into the background.
+func (p Palette) CodeText() string {
+	if p.Tier == TierRGB {
+		return Hex(p.FG)
+	}
+	if p.Dark {
+		return p.HexSlot(White)
+	}
+	return p.HexSlot(Black)
+}
+
+// CodeBackground returns the background Chroma should assume for a code block:
+// the terminal's own, so code reads as part of the page rather than as a panel
+// of its own.
+func (p Palette) CodeBackground() string { return Hex(p.BG) }
+
 // Link returns the colour used for link text and URLs.
 func (p Palette) Link() *string {
 	if p.Dark {

@@ -7,7 +7,7 @@
                                                                            
   [34;48;5;254;1m [m[34;48;5;254;1mHeading[m[34;48;5;254;1m one[m[34;48;5;254;1m [m                                                            
                                                                            
-  A paragraph with [1mbold[m, emphasis, [90;9mstrikethrough[m, [35;48;5;254m inline code [m and a ]8;id=3909271388;https://example.com/very/long/path?query=value[34mlink[m]8;; 
+  A paragraph with [1mbold[m, emphasis, [90;9mstrikethrough[m, [35m inline code [m and a ]8;id=3909271388;https://example.com/very/long/path?query=value[34mlink[m]8;; 
   [34;4m]8;id=3909271388;https://example.com/very/long/path?query=valuehttps://example.com/very/long/path?query=value]8;;[m.                          
                                                                            
   [34;1m▌ [m[34;1mLists[m                                                                  
@@ -43,29 +43,29 @@
                                                                            
    Option        │     Type      │       Default │ Description             
   ───────────────┼───────────────┼───────────────┼─────────────────────────
-   [35;48;5;254m --width [m     │      int      │      terminal │ render width in columns 
-   [35;48;5;254m --theme [m     │    string     │          auto │ dark, light or mono     
+   [35m --width [m     │      int      │      terminal │ render width in columns 
+   [35m --theme [m     │    string     │          auto │ dark, light or mono     
                                                                            
   [34;1m▌ [m[34;1mCode[m                                                                   
                                                                            
   [90m╭─[m[1;35m go [m[90m─────────────────╮[m
-  [90m│ [m[38;5;201mpackage[0m[38;5;254m [0m[38;5;254mmain[0m[38;5;254m        [90m │[m
+  [90m│ [m[38;5;164mpackage[0m[38;5;16m [0m[38;5;16mmain[0m[38;5;16m        [90m │[m
   [90m│ [m                    [90m │[m
   [90m│ [m[0m[38;5;244m// A comment.       [90m │[m
-  [90m│ [m[0m[38;5;201mfunc[0m[38;5;254m [0m[38;5;63mmain[0m[38;5;244m()[0m[38;5;254m [0m[38;5;244m{[0m[38;5;254m       [90m │[m
-  [90m│ [m    [0m[38;5;51mprintln[0m[38;5;244m([0m[38;5;46m"hello"[0m[38;5;244m)[0m[38;5;254m[90m │[m
+  [90m│ [m[0m[38;5;164mfunc[0m[38;5;16m [0m[38;5;21mmain[0m[38;5;244m()[0m[38;5;16m [0m[38;5;244m{[0m[38;5;16m       [90m │[m
+  [90m│ [m    [0m[38;5;44mprintln[0m[38;5;244m([0m[38;5;40m"hello"[0m[38;5;244m)[0m[38;5;16m[90m │[m
   [90m│ [m[0m[38;5;244m}[0m                   [90m │[m
   [90m╰──────────────────────╯[m
                                                                            
   [90m╭─[m[1;35m python [m[90m──────────────────────────────────────────────────────────────────╮[m
-  [90m│ [m[38;5;201mdef[0m[38;5;254m [0m[38;5;63ma_really_long_line_that_will_not_fit_inside_any_reasonable_terminal_w[0m[38;5;244m[0m[38;5;254m[0m[38;5;244m[0m[38;5;254m[90m │[m
-  [90m│ [m[90m↳ [m[38;5;201m[0m[38;5;254m[0m[38;5;63midth[0m[38;5;244m([0m[38;5;254mat_all[0m[38;5;244m):[0m[38;5;254m                                                          [90m │[m
-  [90m│ [m[90m↳ [m[38;5;201m[0m[38;5;254m[0m[38;5;63m[0m[38;5;244m[0m[38;5;254m[0m[38;5;244m[0m[38;5;254m                                                                       [90m │[m
-  [90m│ [m    [0m[38;5;201mreturn[0m[38;5;254m [0m[38;5;46m"wrapped with a continuation marker"[0m                          [90m │[m
+  [90m│ [m[38;5;164mdef[0m[38;5;16m [0m[38;5;21ma_really_long_line_that_will_not_fit_inside_any_reasonable_terminal_w[0m[38;5;244m[0m[38;5;16m[0m[38;5;244m[0m[38;5;16m[90m │[m
+  [90m│ [m[90m↳ [m[38;5;164m[0m[38;5;16m[0m[38;5;21midth[0m[38;5;244m([0m[38;5;16mat_all[0m[38;5;244m):[0m[38;5;16m                                                          [90m │[m
+  [90m│ [m[90m↳ [m[38;5;164m[0m[38;5;16m[0m[38;5;21m[0m[38;5;244m[0m[38;5;16m[0m[38;5;244m[0m[38;5;16m                                                                       [90m │[m
+  [90m│ [m    [0m[38;5;164mreturn[0m[38;5;16m [0m[38;5;40m"wrapped with a continuation marker"[0m                          [90m │[m
   [90m╰───────────────────────────────────────────────────────────────────────────╯[m
                                                                            
   [90m╭─[m[1;35m unknown-language [m[90m────╮[m
-  [90m│ [m[38;5;254mno lexer for this one[0m[90m │[m
+  [90m│ [m[38;5;16mno lexer for this one[0m[90m │[m
   [90m╰───────────────────────╯[m
                                                                            
   [90m╭─[m[90m─────────────────────────────╮[m

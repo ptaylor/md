@@ -7,7 +7,7 @@
                                                                            
   [96;48;5;236;1m [m[96;48;5;236;1mHeading[m[96;48;5;236;1m one[m[96;48;5;236;1m [m                                                            
                                                                            
-  A paragraph with [1mbold[m, emphasis, [90;9mstrikethrough[m, [94;48;5;236m inline code [m and a ]8;id=3909271388;https://example.com/very/long/path?query=value[94mlink[m]8;; 
+  A paragraph with [1mbold[m, emphasis, [90;9mstrikethrough[m, [94m inline code [m and a ]8;id=3909271388;https://example.com/very/long/path?query=value[94mlink[m]8;; 
   [94;4m]8;id=3909271388;https://example.com/very/long/path?query=valuehttps://example.com/very/long/path?query=value]8;;[m.                          
                                                                            
   [96;1m▌ [m[96;1mLists[m                                                                  
@@ -43,8 +43,8 @@
                                                                            
    Option        │     Type      │       Default │ Description             
   ───────────────┼───────────────┼───────────────┼─────────────────────────
-   [94;48;5;236m --width [m     │      int      │      terminal │ render width in columns 
-   [94;48;5;236m --theme [m     │    string     │          auto │ dark, light or mono     
+   [94m --width [m     │      int      │      terminal │ render width in columns 
+   [94m --theme [m     │    string     │          auto │ dark, light or mono     
                                                                            
   [96;1m▌ [m[96;1mCode[m                                                                   
                                                                            

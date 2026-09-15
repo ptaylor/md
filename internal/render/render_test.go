@@ -1,6 +1,8 @@
 package render
 
 import (
+	"fmt"
+	"image/color"
 	"os"
 	"strings"
 	"testing"
@@ -347,4 +349,78 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// probedCaps returns capabilities of the kind a real terminal reports: exact RGB
+// values for the sixteen slots, and a default foreground and background to
+// match.
+func probedCaps(dark bool, fg, bg color.RGBA) term.Caps {
+	var slots [theme.NumSlots]color.RGBA
+	for i := range slots {
+		slots[i] = theme.DefaultSlot(i)
+	}
+	return term.Caps{
+		Width:   80,
+		Height:  24,
+		Dark:    dark,
+		Profile: colorprofile.TrueColor,
+		Palette: theme.Probed(slots, fg, bg, dark),
+	}
+}
+
+// rgbEscape formats a palette colour the way the truecolour formatter does, so
+// tests can look for a colour in the output without hand-writing escapes.
+func rgbEscape(t *testing.T, hex string) string {
+	t.Helper()
+	var r, g, b int
+	if _, err := fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b); err != nil {
+		t.Fatalf("parsing %s: %v", hex, err)
+	}
+	return fmt.Sprintf("38;2;%d;%d;%d", r, g, b)
+}
+
+// TestInlineCodeSitsOnTheTerminalBackground is the regression test for inline
+// code that was hard to read on a dark terminal. Code used to be painted on a
+// lighter shade of the background, which sounds like it adds definition but does
+// the opposite: a colour is chosen against the terminal's background, so moving
+// that background costs contrast. The colour alone marks the code.
+func TestInlineCodeSitsOnTheTerminalBackground(t *testing.T) {
+	caps := probedCaps(true,
+		color.RGBA{R: 0xd8, G: 0xd8, B: 0xd8, A: 0xff},
+		color.RGBA{R: 0x1c, G: 0x1c, B: 0x1c, A: 0xff})
+	out, err := New(caps, Options{MaxWidth: 80}).Render("Some `code` here.\n", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, background := range []string{"48;2;", "48;5;"} {
+		if strings.Contains(out, background) {
+			t.Errorf("inline code is painted on a background of its own (%s):\n%q", background, out)
+		}
+	}
+	want := rgbEscape(t, caps.Palette.HexSlot(theme.BrightBlue))
+	if !strings.Contains(out, want) {
+		t.Errorf("inline code should still be coloured with the accent (%s):\n%q", want, out)
+	}
+}
+
+// TestCodeTextFollowsTheTerminalForeground covers the other half of the same
+// problem: Chroma was told that plain code text is the white slot, which on a
+// light theme is white text on a white background.
+func TestCodeTextFollowsTheTerminalForeground(t *testing.T) {
+	fg := color.RGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xff}
+	caps := probedCaps(false, fg, color.RGBA{R: 0xfa, G: 0xfa, B: 0xfa, A: 0xff})
+	out, err := New(caps, Options{MaxWidth: 80}).Render("```go\npackage main\n```\n", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := rgbEscape(t, theme.Hex(fg)); !strings.Contains(out, want) {
+		t.Errorf("plain code text should use the terminal's foreground %s, want %s in:\n%q",
+			theme.Hex(fg), want, out)
+	}
+	if unwanted := rgbEscape(t, caps.Palette.HexSlot(theme.White)); strings.Contains(out, unwanted) {
+		t.Errorf("plain code text is painted in the white slot (%s), which a light background swallows:\n%q",
+			unwanted, out)
+	}
 }

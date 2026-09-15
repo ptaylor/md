@@ -99,6 +99,15 @@ Text uses the terminal's own default foreground rather than a chosen white or
 grey, and italics are left alone because several terminals render them as
 reverse video.
 
+Code is coloured from the same slots. Every colour comes in a bright and a
+deeper form, and which one shows depends on the background: a dark background
+swallows the deeper half and a light one washes out the bright half, so
+highlighting takes whichever form stays legible, and code with no colour of its
+own keeps the terminal's default foreground. Inline code is marked by its colour
+alone, on the terminal's own background — a shade of the background under text
+that was chosen to sit on the background costs contrast rather than adding
+definition.
+
 If a terminal answers only partially, `md` keeps to colour indices, because
 guessing RGB values for the slots it did not receive would be worse than letting
 the terminal fill them in.

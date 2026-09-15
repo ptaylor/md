@@ -1,7 +1,9 @@
 package theme
 
 import (
+	"fmt"
 	"image/color"
+	"math"
 	"regexp"
 	"testing"
 )
@@ -176,4 +178,127 @@ func TestDefaultSlotBounds(t *testing.T) {
 			t.Errorf("DefaultSlot(%d) = %s, want black for an out-of-range slot", i, got)
 		}
 	}
+}
+
+// TestCodeTextFollowsTheBackground guards the case that made code unreadable:
+// Chroma was given the white slot as its text colour, which on a light theme is
+// white text on a white background, and on a dark theme is a guess at what the
+// terminal's text looks like rather than the real thing.
+func TestCodeTextFollowsTheBackground(t *testing.T) {
+	if got, want := Default(true).CodeText(), Hex(DefaultSlot(White)); got != want {
+		t.Errorf("dark CodeText() = %s, want the terminal's white %s", got, want)
+	}
+	if got, want := Default(false).CodeText(), Hex(DefaultSlot(Black)); got != want {
+		t.Errorf("light CodeText() = %s, want the terminal's black %s", got, want)
+	}
+	if got, want := probedPalette().CodeText(), "#d0d0d0"; got != want {
+		t.Errorf("probed CodeText() = %s, want the probed foreground %s", got, want)
+	}
+}
+
+// TestCodeSlotPicksTheHalfThatShows pins the rule that decides which form of a
+// colour a syntax token gets.
+func TestCodeSlotPicksTheHalfThatShows(t *testing.T) {
+	dark, light := Default(true), Default(false)
+
+	if got, want := dark.CodeSlot(BrightGreen, Green), Hex(DefaultSlot(BrightGreen)); got != want {
+		t.Errorf("dark CodeSlot(BrightGreen, Green) = %s, want the bright %s", got, want)
+	}
+	if got, want := light.CodeSlot(BrightGreen, Green), Hex(DefaultSlot(Green)); got != want {
+		t.Errorf("light CodeSlot(BrightGreen, Green) = %s, want the normal %s", got, want)
+	}
+	if got, want := probedPalette().CodeSlot(BrightCyan, Cyan), "#00ffff"; got != want {
+		t.Errorf("probed CodeSlot(BrightCyan, Cyan) = %s, want #00ffff", got)
+	}
+}
+
+func TestCodeBackgroundIsTheTerminalBackground(t *testing.T) {
+	if got, want := probedPalette().CodeBackground(), "#101018"; got != want {
+		t.Errorf("CodeBackground() = %s, want the terminal's own %s", got, want)
+	}
+}
+
+// lightProbedPalette is the same probe as probedPalette, read on a terminal with
+// a light background.
+func lightProbedPalette() Palette {
+	var slots [NumSlots]color.RGBA
+	for i := range NumSlots {
+		slots[i] = xtermRGB[i]
+	}
+	return Probed(slots,
+		color.RGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xff},
+		color.RGBA{R: 0xfa, G: 0xfa, B: 0xfa, A: 0xff},
+		false)
+}
+
+// TestCodeTextIsReadableOnItsBackground states the guarantee in the terms that
+// matter, rather than in hex values: however the palette was obtained, text in a
+// code block has to be readable against the background it lands on.
+func TestCodeTextIsReadableOnItsBackground(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		p    Palette
+	}{
+		{"dark default", Default(true)},
+		{"light default", Default(false)},
+		{"dark probed", probedPalette()},
+		{"light probed", lightProbedPalette()},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			text := parseHex(t, c.p.CodeText())
+			if got := contrastRatio(text, c.p.BG); got < 4.5 {
+				t.Errorf("code text %s on background %s is %.1f:1, want at least 4.5:1",
+					c.p.CodeText(), Hex(c.p.BG), got)
+			}
+		})
+	}
+}
+
+// TestAccentIsVisibleOnItsBackground covers the colour inline code is drawn in.
+// The accent is the terminal's own blue or magenta, so md cannot guarantee it a
+// ratio the way it does for code text - a palette is free to define its blue as
+// it likes - but it must at least stay visible.
+func TestAccentIsVisibleOnItsBackground(t *testing.T) {
+	for _, p := range []Palette{Default(true), Default(false), probedPalette(), lightProbedPalette()} {
+		accent := *p.Accent()
+		if !hexPattern.MatchString(accent) {
+			continue // an ANSI index: the terminal paints it, so md cannot measure it
+		}
+		if got := contrastRatio(parseHex(t, accent), p.BG); got < 3 {
+			t.Errorf("accent %s on background %s is %.1f:1, want at least 3:1",
+				accent, Hex(p.BG), got)
+		}
+	}
+}
+
+// parseHex turns a palette colour back into RGB for contrast arithmetic.
+func parseHex(t *testing.T, s string) color.RGBA {
+	t.Helper()
+	var c color.RGBA
+	if _, err := fmt.Sscanf(s, "#%02x%02x%02x", &c.R, &c.G, &c.B); err != nil {
+		t.Fatalf("parsing %s: %v", s, err)
+	}
+	c.A = 0xff
+	return c
+}
+
+// contrastRatio is the WCAG contrast ratio between two colours: 1:1 for two
+// identical colours and 21:1 for black against white.
+func contrastRatio(a, b color.RGBA) float64 {
+	la, lb := relativeLuminance(a), relativeLuminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
+func relativeLuminance(c color.RGBA) float64 {
+	channel := func(v uint8) float64 {
+		s := float64(v) / 255
+		if s <= 0.03928 {
+			return s / 12.92
+		}
+		return math.Pow((s+0.055)/1.055, 2.4)
+	}
+	return 0.2126*channel(c.R) + 0.7152*channel(c.G) + 0.0722*channel(c.B)
 }

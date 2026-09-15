@@ -229,11 +229,15 @@ func (r *Renderer) styleConfig(wrap int) ansi.StyleConfig {
 	s.Image = ansi.StylePrimitive{Color: p.Link()}
 	s.ImageText = ansi.StylePrimitive{Color: dim, Format: "🖼  {{.text}}"}
 
+	// Inline code is marked by colour alone. The only background available to
+	// it is a shade of the terminal's own, and a colour is not chosen against a
+	// shade of the background: putting blue on a lighter grey costs contrast
+	// rather than adding definition, so code keeps the terminal's own
+	// background and stands out by its colour.
 	s.Code = ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{
-		Prefix:          "\u00a0",
-		Suffix:          "\u00a0",
-		Color:           p.Accent(),
-		BackgroundColor: p.Panel(),
+		Prefix: "\u00a0",
+		Suffix: "\u00a0",
+		Color:  p.Accent(),
 	}}
 	// md renders fenced code itself, so what glamour sees is only a sentinel
 	// line per block. Indented code blocks have no sentinel and fall through to
@@ -311,48 +315,56 @@ func (r *Renderer) chromaFormatter() string {
 
 // registerChromaStyle publishes the palette as a chroma style.
 //
-// Chroma cannot express ANSI colour indices, so code colours are always real
-// RGB values: either the ones read back from the terminal, or the xterm
-// defaults. The formatter chosen in chromaFormatter decides how faithfully
-// those values come out.
+// Every colour here is one of the terminal's own: which half of the palette a
+// token takes depends on the background - see theme.Palette.CodeSlot - and text
+// with no syntax colour of its own takes the terminal's foreground, so code is
+// legible in a light theme as well as a dark one.
+//
+// Chroma cannot express ANSI colour indices, so these are always real RGB
+// values: either the ones read back from the terminal, or the xterm defaults.
+// The formatter chosen in chromaFormatter decides how faithfully they come out.
 func (r *Renderer) registerChromaStyle() {
 	p := r.caps.Palette
-	hex := p.HexSlot
-	bold := func(i int) string { return "bold " + hex(i) }
-	italic := func(i int) string { return "italic " + hex(i) }
+	// bright and normal name the two forms of a colour: the bright tint suits a
+	// dark background, the deeper one a light background.
+	bright := func(b, n int) string { return p.CodeSlot(b, n) }
+	grey := p.HexSlot(theme.BrightBlack) // mid grey reads on either background
+	text := p.CodeText()
+	bold := func(c string) string { return "bold " + c }
+	italic := func(c string) string { return "italic " + c }
 
 	chromastyles.Register(chroma.MustNewStyle(chromaStyleName, chroma.StyleEntries{
-		chroma.Text:                hex(theme.White),
-		chroma.Error:               hex(theme.BrightRed),
-		chroma.Comment:             hex(theme.BrightBlack),
-		chroma.CommentPreproc:      hex(theme.BrightBlack),
-		chroma.Keyword:             hex(theme.BrightMagenta),
-		chroma.KeywordReserved:     hex(theme.BrightMagenta),
-		chroma.KeywordNamespace:    hex(theme.BrightMagenta),
-		chroma.KeywordType:         hex(theme.BrightYellow),
-		chroma.Operator:            hex(theme.BrightCyan),
-		chroma.Punctuation:         hex(theme.BrightBlack),
-		chroma.Name:                hex(theme.White),
-		chroma.NameBuiltin:         hex(theme.BrightCyan),
-		chroma.NameTag:             hex(theme.BrightRed),
-		chroma.NameAttribute:       hex(theme.BrightYellow),
-		chroma.NameClass:           hex(theme.BrightYellow),
-		chroma.NameConstant:        hex(theme.BrightCyan),
-		chroma.NameDecorator:       hex(theme.BrightBlue),
-		chroma.NameException:       hex(theme.BrightRed),
-		chroma.NameFunction:        hex(theme.BrightBlue),
-		chroma.NameOther:           hex(theme.White),
-		chroma.Literal:             hex(theme.BrightGreen),
-		chroma.LiteralNumber:       hex(theme.BrightMagenta),
-		chroma.LiteralDate:         hex(theme.BrightGreen),
-		chroma.LiteralString:       hex(theme.BrightGreen),
-		chroma.LiteralStringEscape: hex(theme.BrightCyan),
-		chroma.GenericDeleted:      hex(theme.BrightRed),
-		chroma.GenericEmph:         italic(theme.White),
-		chroma.GenericInserted:     bold(theme.BrightGreen),
-		chroma.GenericStrong:       bold(theme.White),
-		chroma.GenericSubheading:   hex(theme.BrightCyan),
-		chroma.Background:          hex(theme.White),
+		chroma.Text:                text,
+		chroma.Error:               bright(theme.BrightRed, theme.Red),
+		chroma.Comment:             grey,
+		chroma.CommentPreproc:      grey,
+		chroma.Keyword:             bright(theme.BrightMagenta, theme.Magenta),
+		chroma.KeywordReserved:     bright(theme.BrightMagenta, theme.Magenta),
+		chroma.KeywordNamespace:    bright(theme.BrightMagenta, theme.Magenta),
+		chroma.KeywordType:         bright(theme.BrightYellow, theme.Yellow),
+		chroma.Operator:            bright(theme.BrightCyan, theme.Cyan),
+		chroma.Punctuation:         grey,
+		chroma.Name:                text,
+		chroma.NameBuiltin:         bright(theme.BrightCyan, theme.Cyan),
+		chroma.NameTag:             bright(theme.BrightRed, theme.Red),
+		chroma.NameAttribute:       bright(theme.BrightYellow, theme.Yellow),
+		chroma.NameClass:           bright(theme.BrightYellow, theme.Yellow),
+		chroma.NameConstant:        bright(theme.BrightCyan, theme.Cyan),
+		chroma.NameDecorator:       bright(theme.BrightBlue, theme.Blue),
+		chroma.NameException:       bright(theme.BrightRed, theme.Red),
+		chroma.NameFunction:        bright(theme.BrightBlue, theme.Blue),
+		chroma.NameOther:           text,
+		chroma.Literal:             bright(theme.BrightGreen, theme.Green),
+		chroma.LiteralNumber:       bright(theme.BrightMagenta, theme.Magenta),
+		chroma.LiteralDate:         bright(theme.BrightGreen, theme.Green),
+		chroma.LiteralString:       bright(theme.BrightGreen, theme.Green),
+		chroma.LiteralStringEscape: bright(theme.BrightCyan, theme.Cyan),
+		chroma.GenericDeleted:      bright(theme.BrightRed, theme.Red),
+		chroma.GenericEmph:         italic(text),
+		chroma.GenericInserted:     bold(bright(theme.BrightGreen, theme.Green)),
+		chroma.GenericStrong:       bold(text),
+		chroma.GenericSubheading:   bright(theme.BrightCyan, theme.Cyan),
+		chroma.Background:          p.CodeBackground(),
 	}))
 }
 
