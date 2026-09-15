@@ -36,7 +36,7 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a missing config file must not be an error: %v", err)
 	}
-	if c.Theme != "auto" || c.Pager != "auto" || c.Mermaid != "box" || c.Links != "auto" {
+	if c.Theme != "auto" || c.Pager != "auto" || c.Mermaid != "auto" || c.Links != "auto" {
 		t.Errorf("unexpected defaults: %+v", c)
 	}
 	if c.MaxWidth != 100 {

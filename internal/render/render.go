@@ -54,9 +54,11 @@ type Options struct {
 	// MaxWidth caps the content width so long lines stay readable on wide
 	// terminals.
 	MaxWidth int
-	// Mermaid controls fenced mermaid blocks: "box" frames the source, "off"
-	// renders them as ordinary code blocks.
+	// Mermaid controls fenced mermaid blocks: "auto" draws them when mmdc is
+	// installed, "box" frames the source, "off" renders them as ordinary code.
 	Mermaid string
+	// Diagrams draws a mermaid diagram, or is nil to always show the source.
+	Diagrams Diagrammer
 	// Links controls link rendering: "auto", "inline", "both" or "plain".
 	Links string
 	// Ascii avoids non-ASCII glyphs entirely.
@@ -100,6 +102,7 @@ func (r *Renderer) Render(src string, width int) (string, error) {
 	body, blocks := substituteBlocks(body)
 	wrap := r.Width(width)
 	r.width = wrap
+	drawings := r.drawDiagrams(blocks, wrap)
 
 	ansiOpts := ansi.Options{
 		WordWrap:         wrap,
@@ -130,7 +133,7 @@ func (r *Renderer) Render(src string, width int) (string, error) {
 		return "", fmt.Errorf("rendering markdown: %w", err)
 	}
 
-	out := r.expandBlocks(buf.String(), blocks)
+	out := r.expandBlocks(buf.String(), blocks, drawings)
 	out = r.applyLinkMode(out)
 	if section := r.footnotesSection(notes); section != "" {
 		out += section
@@ -145,6 +148,41 @@ func (r *Renderer) Render(src string, width int) (string, error) {
 		out = xansi.Strip(out)
 	}
 	return out, nil
+}
+
+// drawDiagrams draws every mermaid fence in the document in one pass, keyed by
+// the block it belongs to. A diagram that cannot be drawn is simply absent, and
+// the fence falls back to showing its source.
+//
+// The whole document goes at once because drawing a diagram starts a browser:
+// done one at a time, a document with a dozen diagrams would take half a minute.
+func (r *Renderer) drawDiagrams(blocks []codeBlock, wrap int) map[string][]string {
+	if r.opts.Diagrams == nil || strings.EqualFold(r.opts.Mermaid, "off") {
+		return nil
+	}
+	var (
+		sources []string
+		ids     []string
+	)
+	for _, b := range blocks {
+		if !isMermaid(b.lang) {
+			continue
+		}
+		sources = append(sources, b.code)
+		ids = append(ids, b.id)
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+	// The panel adds a frame and a gutter; a drawing is given what is left.
+	drawn := r.opts.Diagrams.Diagrams(sources, max(wrap-4, 1))
+	out := make(map[string][]string, len(drawn))
+	for i, lines := range drawn {
+		if len(lines) > 0 {
+			out[ids[i]] = lines
+		}
+	}
+	return out
 }
 
 // styleConfig builds the glamour style for this render.

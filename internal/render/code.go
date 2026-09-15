@@ -84,7 +84,7 @@ func substituteBlocks(src string) (string, []codeBlock) {
 // expandBlocks replaces each rendered sentinel line with the panel it stands
 // for. Ordering, and the indentation of nested blocks, come from the rendered
 // document itself.
-func (r *Renderer) expandBlocks(out string, blocks []codeBlock) string {
+func (r *Renderer) expandBlocks(out string, blocks []codeBlock, drawings map[string][]string) string {
 	if len(blocks) == 0 {
 		return out
 	}
@@ -105,6 +105,12 @@ func (r *Renderer) expandBlocks(out string, blocks []codeBlock) string {
 		avail := r.width - max(indent-docMargin, 0)
 
 		if isMermaid(blk.lang) && !strings.EqualFold(r.opts.Mermaid, "off") {
+			// A drawing that does not fit its panel is shown as source: a
+			// wrapped drawing is not a drawing.
+			if lines, ok := drawings[blk.id]; ok && fitsPanel(lines, avail) {
+				res = append(res, r.panel("mermaid", lines, indent, avail)...)
+				continue
+			}
 			res = append(res, r.panel("mermaid", r.dimLines(splitLines(expandTabs(blk.code))), indent, avail)...)
 			continue
 		}

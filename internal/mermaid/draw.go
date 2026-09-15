@@ -534,6 +534,11 @@ func (g *grid) lines(style func(Kind, string) string) []string {
 		flush()
 		out = append(out, sb.String())
 	}
+	// A drawing rarely fills its last rows: the diagram's coordinate space is
+	// the box around everything mermaid placed, including empty space.
+	for len(out) > 0 && out[len(out)-1] == "" {
+		out = out[:len(out)-1]
+	}
 	return out
 }
 

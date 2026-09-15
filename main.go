@@ -9,7 +9,10 @@ import (
 	"os"
 	"path/filepath"
 
+	xterm "github.com/charmbracelet/x/term"
+
 	"github.com/pftylr/md/internal/config"
+	mdmermaid "github.com/pftylr/md/internal/mermaid"
 	"github.com/pftylr/md/internal/pager"
 	"github.com/pftylr/md/internal/render"
 	"github.com/pftylr/md/internal/term"
@@ -29,7 +32,7 @@ options:
       --max-width N    cap the content width (default: 100)
       --theme NAME     auto, dark, light or mono (default: auto)
       --pager NAME     auto, builtin, less or none (default: auto)
-      --mermaid NAME   box or off (default: box)
+      --mermaid NAME   auto, box or off (default: auto)
       --links NAME     auto, inline, both or plain (default: auto)
       --ascii          use ASCII glyphs instead of box drawing characters
       --no-color       disable colour (also honours NO_COLOR)
@@ -86,7 +89,7 @@ func run() error {
 	fs.IntVar(&maxWidth, "max-width", maxWidth, "cap the content width")
 	fs.StringVar(&themeName, "theme", themeName, "auto, dark, light or mono")
 	fs.StringVar(&pagerMode, "pager", pagerMode, "auto, builtin, less or none")
-	fs.StringVar(&mermaid, "mermaid", mermaid, "box or off")
+	fs.StringVar(&mermaid, "mermaid", mermaid, "auto, box or off")
 	fs.StringVar(&links, "links", links, "auto, inline, both or plain")
 	fs.BoolVar(&ascii, "ascii", ascii, "use ASCII glyphs")
 	fs.BoolVar(&noColor, "no-color", noColor, "disable colour")
@@ -120,11 +123,16 @@ func run() error {
 		Width:      width,
 	})
 	ascii = ascii || caps.Ascii
+	diagrams := mermaidDiagrams(mermaid, cfg.MermaidCmd, caps, ascii)
+	if d, ok := diagrams.(*render.Diagrams); ok {
+		defer reportDiagramFailures(d)
+	}
 	rend := render.New(caps, render.Options{
 		MaxWidth: maxWidth,
 		Mermaid:  mermaid,
 		Links:    links,
 		Ascii:    ascii,
+		Diagrams: diagrams,
 	})
 
 	content, err := rend.Render(src, caps.Width)
@@ -134,8 +142,45 @@ func run() error {
 	return display(rend, caps, pagerMode, name, content)
 }
 
-// display sends the rendered document to the built-in pager, an external pager
-// or straight to stdout.
+// mermaidDiagrams returns the diagram drawer for the chosen mode, or nil when
+// diagrams should be shown as source.
+//
+// auto - the default - uses mmdc when it is installed and shows the source when
+// it is not, so nothing has to be installed for md to work, and nothing has to
+// be configured once it is.
+func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii bool) render.Diagrammer {
+	if mode == "off" || mode == "box" {
+		return nil
+	}
+	tool := &mdmermaid.Tool{Command: cmd}
+	if !tool.Available() {
+		return nil
+	}
+	// A cold run starts a browser per diagram, which takes seconds: say so, on
+	// stderr, so that a slow first read is not a mystery. stdout stays a
+	// document.
+	if xterm.IsTerminal(os.Stderr.Fd()) {
+		tool.OnFirstRun = func() {
+			fmt.Fprintln(os.Stderr, "md: drawing diagrams with mmdc (slow the first time; cached afterwards)")
+		}
+	}
+	diagrams := render.NewDiagrams(tool, caps.Palette, ascii)
+	if !diagrams.Available() {
+		return nil
+	}
+	return diagrams
+}
+
+// reportDiagramFailures says once what could not be drawn, because a diagram
+// quietly replaced by its source is confusing when you expecting a picture.
+func reportDiagramFailures(d *render.Diagrams) {
+	failures := d.Failures()
+	if len(failures) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "md: %d diagram(s) could not be drawn, showing source: %v\n",
+		len(failures), failures[0])
+}
 func display(rend *render.Renderer, caps term.Caps, mode, name, content string) error {
 	if !caps.IsTTY {
 		// Piped or redirected: no pager, and the writer strips colour unless

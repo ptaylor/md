@@ -25,8 +25,10 @@ type Config struct {
 	Theme string
 	// Pager is "auto", "builtin", "less" or "none".
 	Pager string
-	// Mermaid is "box" or "off".
+	// Mermaid is "auto", "box" or "off".
 	Mermaid string
+	// MermaidCmd overrides the mmdc executable to run.
+	MermaidCmd string
 	// Links is "auto", "inline", "both" or "plain".
 	Links string
 	// Ascii forces ASCII glyphs instead of box drawing characters.
@@ -43,7 +45,7 @@ func Defaults() Config {
 		MaxWidth: 100,
 		Theme:    "auto",
 		Pager:    "auto",
-		Mermaid:  "box",
+		Mermaid:  "auto",
 		Links:    "auto",
 	}
 }
@@ -119,10 +121,11 @@ func applyEnv(c *Config) {
 		_ = c.set("max_width", v)
 	}
 	for key, env := range map[string]string{
-		"theme":   "MD_THEME",
-		"pager":   "MD_PAGER_MODE",
-		"mermaid": "MD_MERMAID",
-		"links":   "MD_LINKS",
+		"theme":       "MD_THEME",
+		"pager":       "MD_PAGER_MODE",
+		"mermaid":     "MD_MERMAID",
+		"mermaid_cmd": "MD_MERMAID_CMD",
+		"links":       "MD_LINKS",
 	} {
 		if v, ok := os.LookupEnv(env); ok {
 			_ = c.set(key, v)
@@ -152,7 +155,10 @@ func (c *Config) set(key, value string) error {
 	case "pager":
 		return setEnum(&c.Pager, value, "auto", "builtin", "less", "none")
 	case "mermaid":
-		return setEnum(&c.Mermaid, value, "box", "off")
+		return setEnum(&c.Mermaid, value, "auto", "box", "off")
+	case "mermaid_cmd":
+		c.MermaidCmd = unquote(value)
+		return nil
 	case "links":
 		return setEnum(&c.Links, value, "auto", "inline", "both", "plain")
 	case "ascii":

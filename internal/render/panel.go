@@ -16,6 +16,17 @@ func ruleWidth(content int) int {
 	return max(content-docMargin-levelIndent, 8)
 }
 
+// fitsPanel reports whether a drawing fits the space its panel leaves for
+// content. The panel's own frame and gutter take four cells.
+func fitsPanel(lines []string, avail int) bool {
+	for _, line := range lines {
+		if xansi.StringWidth(line) > avail-4 {
+			return false
+		}
+	}
+	return true
+}
+
 // ruleWidth is the rule length for the render in progress.
 func (r *Renderer) ruleWidth() int { return ruleWidth(r.width) }
 

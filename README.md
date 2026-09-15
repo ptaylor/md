@@ -54,7 +54,7 @@ pipe, so `cat notes.md | md` and `md < notes.md` both work.
 | `--max-width N` | `100` | cap the content width so long lines stay readable |
 | `--theme NAME` | `auto` | `auto`, `dark`, `light` or `mono` |
 | `--pager NAME` | `auto` | `auto`, `builtin`, `less` or `none` |
-| `--mermaid NAME` | `box` | `box` frames mermaid source, `off` treats it as code |
+| `--mermaid NAME` | `auto` | `auto` draws diagrams with `mmdc`, `box` frames the source, `off` treats it as code |
 | `--links NAME` | `auto` | `auto`, `inline`, `both` or `plain` |
 | `--ascii` | off | ASCII glyphs instead of box drawing characters |
 | `--no-color` | off | disable colour (also honours `NO_COLOR`) |
@@ -123,7 +123,8 @@ width = 0            # 0 means "use the terminal width"
 max_width = 100
 theme = "auto"       # auto, dark, light or mono
 pager = "auto"       # auto, builtin, less or none
-mermaid = "box"      # box or off
+mermaid = "auto"     # auto, box or off
+mermaid_cmd = ""     # mmdc to run, if not the one on the PATH
 links = "auto"       # auto, inline, both or plain
 ascii = false
 no_color = false
@@ -136,6 +137,7 @@ Environment variables override the file, and command line flags override both:
 | -------- | ---- |
 | `MD_WIDTH`, `MD_MAX_WIDTH` | render width, maximum content width |
 | `MD_THEME`, `MD_PAGER_MODE`, `MD_MERMAID`, `MD_LINKS` | the matching option |
+| `MD_MERMAID_CMD` | the `mmdc` executable to run |
 | `MD_ASCII`, `MD_NO_COLOR`, `MD_NO_PROBE` | the matching switch |
 | `MD_PAGER` | the external pager command |
 | `MD_HYPERLINKS=0` | do not use OSC 8 hyperlinks even if supported |
@@ -151,13 +153,45 @@ panel.
 
 Code fences are drawn as labelled panels with real syntax highlighting, and lines
 too long for the panel are wrapped with a `↳` continuation marker rather than
-truncated. Mermaid fences are framed as source with a label.
+truncated. Mermaid fences are drawn as diagrams when `mmdc` is installed, and
+otherwise framed as source.
+
+## Mermaid diagrams
+
+A mermaid fence is drawn as a diagram if `mmdc`, the mermaid command line
+renderer, is installed. Nothing has to be configured:
+
+```sh
+npm install -g @mermaid-js/mermaid-cli
+```
+
+`mmdc` is optional and `md` never needs it. It is used as a **layout engine**
+only: mermaid decides where the boxes go and how the lines between them run, md
+reads that geometry back out of the SVG and draws it itself. So a diagram is
+text, in the terminal's own colours, and it scrolls with the rest of the
+document - none of which an image inside a pager can do.
+
+The SVG `mmdc` produces is cached under the user's cache directory, keyed by the
+diagram and the version of `mmdc`. Drawing a diagram means starting a browser,
+about two seconds per diagram, so the first read of a document is slow and every
+read after it is instant.
+
+What `md` will not do is draw a diagram it cannot draw properly. A diagram with
+a node it cannot read, or one that will not fit the width available, is shown as
+source. Wide diagrams are drawn as small as the text allows, and labels are
+wrapped rather than truncated, so nothing is quietly lost - a picture that drops
+a step is worse than the source it came from.
+
+Diagram types `md` cannot draw yet - sequence, pie, class, state, ER - fall back
+to the framed source, as do the colours a diagram asks for with `style` or
+`classDef`: the terminal's palette wins.
 
 ### Known limitations
 
-- **Mermaid diagrams are not drawn.** The source is framed and labelled so it is
-  readable, but no layout is attempted. Rendering flowcharts and sequence
-  diagrams as text is the next substantial piece of work.
+- **Mermaid support is partial.** Flowcharts are drawn when `mmdc` is installed.
+  Sequence, pie, class, state and ER diagrams are shown as source, as are
+  flowcharts with shapes `md` cannot yet place. Their routing is mermaid's, so a
+  crowded diagram can still draw lines through a box.
 - **Images are placeholders.** `![alt](path)` renders as a caption and a path.
   Inline images need the kitty or iTerm2 graphics protocol, and they do not
   survive a scrolling viewport.
