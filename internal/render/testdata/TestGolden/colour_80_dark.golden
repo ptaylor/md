@@ -1,0 +1,100 @@
+  [90m╭─[m[1;94m metadata [m[90m─────────────╮[m
+  [90m│ [m[90mtitle[m   Fixture       [90m │[m
+  [90m│ [m[90mauthor[m  md test suite [90m │[m
+  [90m│ [m[90mtags[m    render, golden[90m │[m
+  [90m╰────────────────────────╯[m
+
+                                                                           
+  [96;48;5;236;1m [m[96;48;5;236;1mHeading[m[96;48;5;236;1m one[m[96;48;5;236;1m [m                                                            
+                                                                           
+  A paragraph with [1mbold[m, emphasis, [90;9mstrikethrough[m, [94;48;5;236m inline code [m and a ]8;id=3909271388;https://example.com/very/long/path?query=value[94mlink[m]8;; 
+  [94;4m]8;id=3909271388;https://example.com/very/long/path?query=valuehttps://example.com/very/long/path?query=value]8;;[m.                          
+                                                                           
+  [96;1m▌ [m[96;1mLists[m                                                                  
+                                                                           
+  • first bullet                                                           
+    • nested bullet                                                        
+      • deeper still                                                       
+                                                                           
+  • second bullet with a very long line that has to be wrapped by the      
+  renderer to                                                              
+  fit within the configured width, because that is what readers expect     
+                                                                           
+  1. ordered one                                                           
+  2. ordered two                                                           
+    • nested under ordered                                                 
+                                                                           
+                                                                           
+  [✓] finished task                                                        
+  [ ] pending task                                                         
+                                                                           
+  ▌ A block quote, which should be marked down its left edge.              
+  ▌                                                                        
+  ▌ ▌ And a nested quote inside it.                                        
+                                                                           
+  Term                                                                     
+      the definition of the term                                           
+                                                                           
+  Other term                                                               
+      another definition                                                   
+                                                                           
+                                                                           
+  [96;1m▌ [m[96;1mTable[m                                                                  
+                                                                           
+   Option        │     Type      │       Default │ Description             
+  ───────────────┼───────────────┼───────────────┼─────────────────────────
+   [94;48;5;236m --width [m     │      int      │      terminal │ render width in columns 
+   [94;48;5;236m --theme [m     │    string     │          auto │ dark, light or mono     
+                                                                           
+  [96;1m▌ [m[96;1mCode[m                                                                   
+                                                                           
+  [90m╭─[m[1;94m go [m[90m─────────────────╮[m
+  [90m│ [m[38;5;201mpackage[0m[38;5;254m [0m[38;5;254mmain[0m[38;5;254m        [90m │[m
+  [90m│ [m                    [90m │[m
+  [90m│ [m[0m[38;5;244m// A comment.       [90m │[m
+  [90m│ [m[0m[38;5;201mfunc[0m[38;5;254m [0m[38;5;63mmain[0m[38;5;244m()[0m[38;5;254m [0m[38;5;244m{[0m[38;5;254m       [90m │[m
+  [90m│ [m    [0m[38;5;51mprintln[0m[38;5;244m([0m[38;5;46m"hello"[0m[38;5;244m)[0m[38;5;254m[90m │[m
+  [90m│ [m[0m[38;5;244m}[0m                   [90m │[m
+  [90m╰──────────────────────╯[m
+                                                                           
+  [90m╭─[m[1;94m python [m[90m──────────────────────────────────────────────────────────────────╮[m
+  [90m│ [m[38;5;201mdef[0m[38;5;254m [0m[38;5;63ma_really_long_line_that_will_not_fit_inside_any_reasonable_terminal_w[0m[38;5;244m[0m[38;5;254m[0m[38;5;244m[0m[38;5;254m[90m │[m
+  [90m│ [m[90m↳ [m[38;5;201m[0m[38;5;254m[0m[38;5;63midth[0m[38;5;244m([0m[38;5;254mat_all[0m[38;5;244m):[0m[38;5;254m                                                          [90m │[m
+  [90m│ [m[90m↳ [m[38;5;201m[0m[38;5;254m[0m[38;5;63m[0m[38;5;244m[0m[38;5;254m[0m[38;5;244m[0m[38;5;254m                                                                       [90m │[m
+  [90m│ [m    [0m[38;5;201mreturn[0m[38;5;254m [0m[38;5;46m"wrapped with a continuation marker"[0m                          [90m │[m
+  [90m╰───────────────────────────────────────────────────────────────────────────╯[m
+                                                                           
+  [90m╭─[m[1;94m unknown-language [m[90m────╮[m
+  [90m│ [m[38;5;254mno lexer for this one[0m[90m │[m
+  [90m╰───────────────────────╯[m
+                                                                           
+  [90m╭─[m[90m─────────────────────────────╮[m
+  [90m│ [mplain fence with no language[90m │[m
+  [90m╰──────────────────────────────╯[m
+                                                                           
+  An indented code block:                                                  
+                                                                           
+  indented line one                                                        
+  indented line two                                                        
+                                                                           
+  [96;1m▌ [m[96;1mMermaid[m                                                                
+                                                                           
+  [90m╭─[m[1;94m mermaid [m[90m────────────╮[m
+  [90m│ [m[90mgraph TD[m            [90m │[m
+  [90m│ [m[90m    A --> B[m         [90m │[m
+  [90m╰──────────────────────╯[m
+                                                                           
+  [96;1m▌ [m[96;1mExtras[m                                                                 
+  [90m[m                                                                         
+  [90m─────────────────────────────────────────────────────────────────────────[m
+  [90m[m                                                                         
+  Text with a footnote[1] and a second reference to it[1], plus one        
+  more[2].                                                                 
+
+
+  [90m─────────────────────────────────────────────────────────────────────────[m
+  [1;96mFootnotes[m
+
+    [94m1.[m The first note, which is long enough that it should wrap onto a second
+       line when the terminal is narrow.
+    [94m2.[m The second note.

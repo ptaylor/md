@@ -1,0 +1,26 @@
+# Build output.
+#
+# install.sh builds into bin/ and links ~/bin/md at it, and a plain
+# "go build ." drops a binary named md in the repository root.
+/bin/
+/md
+/dist/
+
+# Go test, coverage and profiling artifacts.
+*.test
+*.out
+coverage.txt
+coverage.html
+*.prof
+
+# macOS and editor cruft.
+.DS_Store
+*~
+*.swp
+*.swo
+
+# Per-user editor settings. Uncomment to keep them out of the repository.
+# .vscode/
+
+# Scratch documents, so trying md out does not dirty the tree.
+*.local.md
