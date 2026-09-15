@@ -87,7 +87,7 @@ class Palette:
 
 An unknown language, which should still be framed and readable:
 
-```brainfuck-not-really
+```not-a-real-language
 this language has no lexer, so md falls back to plain text
 + +++[->++++<]>[->++++<]>.
 ```
