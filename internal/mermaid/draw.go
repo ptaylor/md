@@ -1,7 +1,6 @@
 package mermaid
 
 import (
-	"math"
 	"strings"
 
 	xansi "github.com/charmbracelet/x/ansi"
@@ -331,73 +330,66 @@ func drawNode(g *grid, n Node, l layout, gl glyphs) {
 	// corners instead would lose up to a cell and clip a label.
 	x0, y0 := toCell(n.Box.X, n.Box.Y, l)
 	w, h := cells(n.Box.W, l.scale), rows(n.Box.H, l.scale)
-	x1, y1 := x0+w-1, y0+h-1
-	if x1 <= x0 || y1 <= y0 {
+	if w < 3 || h < 3 {
 		return
 	}
-	inner := innerWidth(w)
+	var sides []pointed
 	if n.Shape == Diamond {
-		// A pointed box has half the room in its middle, so the outline is four
-		// slanted edges and the label is wrapped to what fits between them.
-		drawDiamond(g, x0, y0, x1, y1, KindBorder, gl)
-		inner = diamondLabelWidth(w)
+		sides = diamondRows(w, h)
+		drawDiamond(g, x0, y0, sides, KindBorder, gl)
 	} else {
-		drawBox(g, x0, y0, x1, y1, n.Shape == Round, KindBorder, gl)
+		drawBox(g, x0, y0, x0+w-1, y0+h-1, n.Shape == Round, KindBorder, gl)
 	}
-	if inner < 1 {
-		inner = 1
-	}
-	lines := wrapCells(n.Label, inner)
-	top := y0 + (y1-y0+1-len(lines))/2
-	for i, text := range lines {
-		if top+i <= y0 || top+i >= y1 {
-			continue // no room inside the box
-		}
-		left := x0 + 1 + pad + max((inner-xansi.StringWidth(text))/2, 0)
-		g.text(left, top+i, text, KindText)
-	}
-}
-
-// drawDiamond draws a pointed outline.
-//
-// The edges are drawn one glyph per row, which is what makes a diamond read
-// correctly: a cell is about twice as tall as it is wide, so a shape whose sides
-// step one column per row is at forty-five degrees to the eye.
-func drawDiamond(g *grid, x0, y0, x1, y1 int, k Kind, gl glyphs) {
-	for y := y0; y <= y1; y++ {
-		for x := x0; x <= x1; x++ {
-			g.clear(x, y)
-		}
-	}
-	midX, midY := (x0+x1)/2, (y0+y1)/2
-	g.slant(midX, y0, x1, midY, k, gl)
-	g.slant(x1, midY, midX, y1, k, gl)
-	g.slant(midX, y1, x0, midY, k, gl)
-	g.slant(x0, midY, midX, y0, k, gl)
-	// Point the side tips outwards, which is what a pointed box is for.
-	g.set(x0, midY, '<', k)
-	g.set(x1, midY, '>', k)
-}
-
-// slant draws a line one glyph per row, interpolating the column between the
-// ends, so a shallow or steep slant still joins up to the eye.
-func (g *grid) slant(x0, y0, x1, y1 int, k Kind, gl glyphs) {
-	steps := abs(y1 - y0)
-	if steps == 0 {
-		g.segment(x0, y0, x1, y1, k, gl)
+	// The label goes in the room nodeLabel measured, which is the room the fit
+	// test agreed to when it chose this scale.
+	lines, room, top, ok := nodeLabel(n, w, h)
+	if !ok {
 		return
 	}
-	for i := 0; i <= steps; i++ {
-		t := float64(i) / float64(steps)
-		x := x0 + int(math.Round(t*float64(x1-x0)))
-		y := y0 + int(math.Round(t*float64(y1-y0)))
-		g.set(x, y, diagRune(x1 > x0, y1 > y0), k)
+	for i, text := range lines {
+		width := xansi.StringWidth(text)
+		left := x0 + 1 + pad + (room-width)/2
+		if sides != nil {
+			// A pointed box has different room on every row, so a line is
+			// centred on the run its own row leaves rather than on the frame.
+			row := sides[top+i]
+			left = x0 + row.left + row.tread + 1 + (row.room()-width)/2
+		}
+		g.text(left, y0+top+i, text, KindText)
 	}
 }
 
-// diamondLabelWidth returns the width a pointed box can hold. The widest part of
-// a diamond is its middle, so a label there has about half the box's width.
-func diamondLabelWidth(frame int) int { return max(frame/2-2, 1) }
+// drawDiamond draws a pointed outline from the rows diamondRows measured.
+func drawDiamond(g *grid, x0, y0 int, sides []pointed, k Kind, gl glyphs) {
+	if sides == nil {
+		return
+	}
+	mid := (len(sides) - 1) / 2
+	for y, row := range sides {
+		// Clear the row's run of cells, so a line routed behind the box does
+		// not show through it. Only the run: the frame's corners are outside
+		// the shape, and a line crossing one is meant to be visible.
+		for x := row.left; x <= row.right; x++ {
+			g.clear(x0+x, y0+y)
+		}
+		// The sides run down the left of the box and back up its right, meeting
+		// at the corners; where they meet at an apex the second one set wins,
+		// which gives the top a / and the bottom a \.
+		left, right := gl.forward, gl.back
+		switch {
+		case y == mid:
+			left, right = '<', '>'
+		case y > mid:
+			left, right = gl.back, gl.forward
+		}
+		g.set(x0+row.right, y0+y, right, k)
+		g.set(x0+row.left, y0+y, left, k)
+		for i := 1; i <= row.tread; i++ {
+			g.set(x0+row.left+i, y0+y, gl.h, k)
+			g.set(x0+row.right-i, y0+y, gl.h, k)
+		}
+	}
+}
 
 // drawEdge draws a routed line and its arrow head.
 //

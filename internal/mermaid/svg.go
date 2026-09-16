@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -41,6 +42,18 @@ const (
 	// Round is a terminator, drawn with rounded corners.
 	Round
 )
+
+// String names the shape, so that a test failure says which one came out.
+func (s Shape) String() string {
+	switch s {
+	case Diamond:
+		return "diamond"
+	case Round:
+		return "round"
+	default:
+		return "rect"
+	}
+}
 
 // Edge is a routed line between two nodes.
 type Edge struct {
@@ -98,6 +111,44 @@ func Parse(r io.Reader) (Diagram, error) {
 		return Diagram{}, fmt.Errorf("%w: %d of %d nodes", ErrNotSupported, p.unreadable, p.groups)
 	}
 	return p.d, nil
+}
+
+// polygonShape tells the shapes mermaid draws as polygons apart.
+//
+// A polygon is not necessarily a diamond: a subroutine is one too, drawn as a
+// rectangle with the two bars that mark it, and a hexagon is a third. What
+// separates them is how much of the bounding box they fill. A diamond is a
+// square turned on its corner and so fills half of it; a hexagon three quarters;
+// a rectangle all of it. Anything fuller than a diamond is drawn as a box.
+func polygonShape(pts []Point) Shape {
+	box := bounds(pts)
+	if box.W <= 0 || box.H <= 0 {
+		return Rect
+	}
+	if math.Abs(shoelace(pts)) <= diamondFill*box.W*box.H {
+		return Diamond
+	}
+	return Rect
+}
+
+// diamondFill is the fraction of its bounding box a diamond covers, with room
+// for the rounding in mermaid's own coordinates.
+const diamondFill = 0.6
+
+// shoelace returns twice the signed area of a closed polygon, by the surveyor's
+// formula. A polygon whose points retrace a shape - mermaid draws a subroutine's
+// bars as part of the same loop - adds to the area rather than cancelling, which
+// is what makes the fill test work on those too.
+func shoelace(pts []Point) float64 {
+	if len(pts) < 3 {
+		return 0
+	}
+	sum := 0.0
+	for i, p := range pts {
+		q := pts[(i+1)%len(pts)]
+		sum += p.X*q.Y - q.X*p.Y
+	}
+	return sum / 2
 }
 
 // captureKind records what an open group is contributing geometry for.
@@ -187,7 +238,7 @@ func (p *parser) start(el xml.StartElement) error {
 		if p.node != nil && p.node.Box.W == 0 {
 			if pts, ok := pointsOf(attr(el, "points")); ok {
 				p.node.Box = p.trans.boxOfPoints(pts)
-				p.node.Shape = Diamond
+				p.node.Shape = polygonShape(pts)
 			}
 		}
 	case "circle":

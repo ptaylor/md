@@ -1,6 +1,7 @@
 package mermaid
 
 import (
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -98,6 +99,70 @@ func TestParseFixtures(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestParsePolygonShapesAreToldApart checks that a diamond is recognised from its
+// geometry rather than from the fact that mermaid happens to draw it as a
+// polygon. A subroutine is a polygon too, and taking one for a diamond put its
+// label into a shape with no room for it: the label wrapped to lines the drawing
+// then dropped, so a node read "n" where it should have read "run".
+func TestParsePolygonShapesAreToldApart(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		pts  string
+		box  Box
+		want Shape
+	}{
+		{
+			// A square standing on its corner, covering half its box.
+			name: "diamond",
+			pts:  "99.46,0 198.92,-99.46 99.46,-198.92 0,-99.46",
+			box:  Box{X: 100, Y: 1.08, W: 198.92, H: 198.92},
+			want: Diamond,
+		},
+		{
+			// The bars mermaid draws across a subroutine are part of the same
+			// loop, so the polygon covers more ground than its box: the outline
+			// is the box, and the box is what md draws.
+			name: "subroutine",
+			pts:  "0,0 39,0 39,-39 0,-39 0,0 -8,0 47,0 47,-39 -8,-39 -8,0",
+			box:  Box{X: 92, Y: 161, W: 55, H: 39},
+			want: Rect,
+		},
+		{
+			// A hexagon fills three quarters of its box, which is fuller than a
+			// diamond: a box is a better lie than a diamond with clipped sides.
+			name: "hexagon",
+			pts:  "9.75,0 50.23,0 60,-19.5 50.23,-39 9.75,-39 0,-19.5",
+			box:  Box{X: 100, Y: 161, W: 60, H: 39},
+			want: Rect,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <g class="nodes"><g class="node default" transform="translate(100, 200)">
+    <polygon class="label-container" points="` + tc.pts + `"/>
+    <g class="label"><foreignObject><div><span class="nodeLabel"><p>x</p></span></div></foreignObject></g>
+  </g></g>
+</svg>`
+			d, err := Parse(strings.NewReader(doc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := d.Nodes[0].Shape, tc.want; got != want {
+				t.Errorf("shape = %v, want %v", got, want)
+			}
+			if got := d.Nodes[0].Box; !sameBox(got, tc.box, 0.01) {
+				t.Errorf("box = %+v, want %+v", got, tc.box)
+			}
+		})
+	}
+}
+
+// sameBox compares boxes to within mermaid's own rounding.
+func sameBox(a, b Box, tol float64) bool {
+	close := func(x, y float64) bool { return math.Abs(x-y) <= tol }
+	return close(a.X, b.X) && close(a.Y, b.Y) && close(a.W, b.W) && close(a.H, b.H)
 }
 
 func hasLabel(d Diagram, want string) bool {

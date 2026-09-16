@@ -204,12 +204,20 @@ Diagram types `md` cannot draw yet - sequence, pie, class, state, ER - fall back
 to the framed source, as do the colours a diagram asks for with `style` or
 `classDef`: the terminal's palette wins.
 
+A node's outline is read from the shape mermaid drew: a rectangle, a rounded box,
+a circle, and a point for a decision. Mermaid draws several shapes as a polygon -
+a subroutine with its bars, a hexagon - so `md` tells them apart by how much of
+their box they fill, and draws the ones it has no outline for as their bounding
+box. A plain box for a subroutine keeps the label and loses only the decoration,
+which is a better bargain than a diamond the label does not fit inside.
+
 ### Known limitations
 
 - **Mermaid support is partial.** Flowcharts are drawn when `mmdc` is installed.
-  Sequence, pie, class, state and ER diagrams are shown as source, as are
-  flowcharts with shapes `md` cannot yet place. Their routing is mermaid's, so a
-  crowded diagram can still draw lines through a box.
+  Sequence, pie, class, state and ER diagrams are shown as source. Shapes without
+  an outline of their own - a subroutine, a hexagon - are drawn as plain boxes.
+  Their routing is mermaid's, so a crowded diagram can still draw lines through a
+  box.
 - **Images are placeholders.** `![alt](path)` renders as a caption and a path.
   Inline images need the kitty or iTerm2 graphics protocol, and they do not
   survive a scrolling viewport.

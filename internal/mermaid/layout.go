@@ -84,15 +84,11 @@ func rows(units, scale float64) int { return int(units/(2*scale) + 0.5) }
 
 // fitsAt reports whether every label still fits its box at a scale. The room
 // measured here has to be the room the drawing code uses, or a label will be
-// wrapped to fewer cells than it is given and lose words.
+// wrapped to fewer cells than it is given and lose words, which is why both go
+// through nodeLabel.
 func fitsAt(d Diagram, scale float64) bool {
 	for _, n := range d.Nodes {
-		cols := innerWidth(cells(n.Box.W, scale))
-		rows := rows(n.Box.H, scale) - 2
-		if cols < 1 || rows < 1 {
-			return false
-		}
-		if len(wrapCells(n.Label, cols)) > rows {
+		if _, _, _, ok := nodeLabel(n, cells(n.Box.W, scale), rows(n.Box.H, scale)); !ok {
 			return false
 		}
 	}
@@ -106,16 +102,146 @@ func fitsWholeWords(d Diagram, scale float64) bool {
 		return false
 	}
 	for _, n := range d.Nodes {
-		cols := innerWidth(cells(n.Box.W, scale))
+		_, room, _, ok := nodeLabel(n, cells(n.Box.W, scale), rows(n.Box.H, scale))
+		if !ok {
+			return false
+		}
 		for _, line := range n.Label {
 			for _, word := range strings.Fields(line) {
-				if xansi.StringWidth(word) > cols {
+				if xansi.StringWidth(word) > room {
 					return false
 				}
 			}
 		}
 	}
 	return true
+}
+
+// nodeLabel wraps a node's label to the room its frame gives it, and reports the
+// row of the frame the first line sits on, counted from the frame's top.
+//
+// Layout and drawing both come through here, because the width a label is wrapped
+// to is a promise to the drawing: a shape that is narrow away from its middle has
+// no single width, so a caller working it out for itself would lose words.
+func nodeLabel(n Node, w, h int) (lines []string, room, top int, ok bool) {
+	if n.Shape == Diamond {
+		return diamondLabel(n.Label, w, h)
+	}
+	room = innerWidth(w)
+	if room < 1 || h-2 < 1 {
+		return nil, 0, 0, false
+	}
+	lines = wrapCells(n.Label, room)
+	if len(lines) > h-2 {
+		return nil, 0, 0, false
+	}
+	// A frame has a border top and bottom, and the label sits between them.
+	return lines, room, (h - len(lines)) / 2, true
+}
+
+// diamondFrame trims a frame to the odd size a pointed box is drawn at, so that
+// its apex sits exactly between its corners instead of half a cell to one side.
+func diamondFrame(w, h int) (int, int) {
+	if w%2 == 0 {
+		w--
+	}
+	if h%2 == 0 {
+		h--
+	}
+	return w, h
+}
+
+// pointed is one row of a pointed box's outline: the columns its two sides are
+// drawn at, and how many cells each side crosses besides its own glyph.
+type pointed struct {
+	left, right, tread int
+}
+
+// room is the run of cells between the sides on this row, which is what a label
+// sitting on the row has to work with.
+func (r pointed) room() int { return max(r.right-r.left-2*r.tread-1, 0) }
+
+// diamondRows gives the outline of a pointed box, row by row.
+//
+// A pointed box is twice as wide as it is tall in cells: a cell is about twice as
+// tall as it is wide, and mermaid draws a diamond as wide as it is high in its
+// own units. Its sides therefore run two columns sideways for every row they
+// drop, which one glyph per row cannot show - the steps would not join up. So
+// each row carries the run of cells its side crosses on its way down: a slash
+// where the side lands, and dashes for the row it crossed to get there.
+func diamondRows(w, h int) []pointed {
+	w, h = diamondFrame(w, h)
+	if w < 3 || h < 3 {
+		return nil
+	}
+	midX, midY := (w-1)/2, (h-1)/2
+	// off is how far a row's sides are from the frame's centre: the corners are
+	// the full half width away, the apexes none of it.
+	off := func(d int) int { return ((midY-d)*midX + midY/2) / midY }
+	out := make([]pointed, h)
+	for y := range out {
+		d := abs(y - midY)
+		reach := off(d)
+		// A row's tread is the ground covered coming down from the row nearer
+		// the apex, less the glyph that stands for the landing itself.
+		tread := 0
+		if d < midY {
+			tread = max(reach-off(d+1)-1, 0)
+		}
+		out[y] = pointed{left: midX - reach, right: midX + reach, tread: tread}
+	}
+	return out
+}
+
+// diamondLabel lays a label out inside a pointed box.
+//
+// The box is only wide near its middle, so how much room the label has depends on
+// how many rows it needs, and how many rows it needs depends on how much room it
+// has. The two are untangled by trying the shortest block of rows that could hold
+// it: fewest lines wins, which keeps a short label on the single row where the
+// box is widest.
+func diamondLabel(label []string, w, h int) (lines []string, room, top int, ok bool) {
+	rows := diamondRows(w, h)
+	if rows == nil {
+		return nil, 0, 0, false
+	}
+	h = len(rows)
+	mid := (h - 1) / 2
+	for k := 1; k <= h-2; k++ {
+		first := mid - (k-1)/2
+		if first < 1 || first+k > h-1 {
+			break // the block would have to cover an apex, which has no room
+		}
+		room = roomFor(rows, first, k)
+		if room < 1 {
+			continue
+		}
+		lines = wrapCells(label, room)
+		switch {
+		case len(lines) > k:
+			continue
+		case len(lines) < k:
+			// The wrap came out shorter than the block it was tried in, so it
+			// has room to spare: lay it out again at the size it turned out to
+			// be, which is nearer the middle and so wider.
+			k = len(lines)
+			first = mid - (k-1)/2
+			room = roomFor(rows, first, k)
+			lines = wrapCells(label, room)
+		}
+		return lines, room, first, true
+	}
+	return nil, 0, 0, false
+}
+
+// roomFor is the narrowest run across a block of rows, which is all a label laid
+// over them can count on.
+func roomFor(rows []pointed, first, k int) int {
+	room := rows[first].room()
+	for y := first + 1; y < first+k; y++ {
+		room = min(room, rows[y].room())
+	}
+	return room
 }
 
 // innerWidth is the room inside a frame: the two border cells and the breathing
