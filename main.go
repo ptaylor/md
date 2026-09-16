@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	xterm "github.com/charmbracelet/x/term"
 
@@ -123,8 +125,12 @@ func run() error {
 		Width:      width,
 	})
 	ascii = ascii || caps.Ascii
-	diagrams := mermaidDiagrams(mermaid, cfg.MermaidCmd, caps, ascii)
-	if d, ok := diagrams.(*render.Diagrams); ok {
+	// Diagrams are drawn with mmdc when it is installed. When stderr is a
+	// terminal the wait is reported diagram by diagram, and the summary at the
+	// end would only repeat it.
+	showProgress := xterm.IsTerminal(os.Stderr.Fd())
+	diagrams := mermaidDiagrams(mermaid, cfg.MermaidCmd, caps, ascii, showProgress)
+	if d, ok := diagrams.(*render.Diagrams); ok && !showProgress {
 		defer reportDiagramFailures(d)
 	}
 	rend := render.New(caps, render.Options{
@@ -148,7 +154,7 @@ func run() error {
 // auto - the default - uses mmdc when it is installed and shows the source when
 // it is not, so nothing has to be installed for md to work, and nothing has to
 // be configured once it is.
-func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii bool) render.Diagrammer {
+func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii, showProgress bool) render.Diagrammer {
 	if mode == "off" || mode == "box" {
 		return nil
 	}
@@ -156,19 +162,59 @@ func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii bool) render.Diagra
 	if !tool.Available() {
 		return nil
 	}
-	// A cold run starts a browser per diagram, which takes seconds: say so, and
-	// say how to skip it, on stderr - stdout stays a document.
-	if xterm.IsTerminal(os.Stderr.Fd()) {
+	// A cold run starts a browser per diagram, which takes seconds: say so, say
+	// how to skip it, and then say what is happening as each diagram is drawn.
+	// All of it goes to stderr, because stdout stays a document.
+	if showProgress {
 		tool.OnFirstRun = func() {
-			fmt.Fprintln(os.Stderr, "md: drawing diagrams with mmdc - slow the first time, cached after that")
-			fmt.Fprintln(os.Stderr, "md: pass --mermaid box (show the source) or --mermaid off (treat it as code) to skip it")
+			// The timings on the lines that follow say how slow this is; the
+			// header only has to say what is going on and how to opt out.
+			fmt.Fprintln(os.Stderr, "md: drawing diagrams with mmdc")
+			fmt.Fprintln(os.Stderr, "md: --mermaid box shows the source, --mermaid off treats it as code")
 		}
+		tool.Progress = reportDiagramProgress
 	}
 	diagrams := render.NewDiagrams(tool, caps.Palette, ascii)
 	if !diagrams.Available() {
 		return nil
 	}
 	return diagrams
+}
+
+// reportDiagramProgress writes one line per diagram: as it starts, and as it
+// finishes. Diagrams come back in whatever order they happen to finish, since
+// they are drawn at the same time, so the position in the document is printed
+// rather than implied by the order.
+func reportDiagramProgress(p mdmermaid.Progress) {
+	prefix := fmt.Sprintf("md: %2d/%-2d %-42s ", p.Index, p.Total, p.Label)
+	switch {
+	case p.Cached:
+		fmt.Fprintln(os.Stderr, prefix+"cached")
+	case p.Started:
+		fmt.Fprintln(os.Stderr, prefix+"drawing...")
+	case p.Err != nil:
+		fmt.Fprintln(os.Stderr, prefix+"failed: "+firstLine(p.Err.Error()))
+	default:
+		fmt.Fprintf(os.Stderr, "%sdrawn in %s\n", prefix, p.Took.Round(time.Millisecond))
+	}
+}
+
+// firstLine returns the first line of a message, capped so that one long error
+// does not run away across the terminal.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return capRunes(strings.TrimSpace(s), 80)
+}
+
+// capRunes trims a string to n characters, marking that it was trimmed.
+func capRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
 }
 
 // reportDiagramFailures says once what could not be drawn, because a diagram

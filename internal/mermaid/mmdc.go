@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	xansi "github.com/charmbracelet/x/ansi"
 )
 
 // DefaultCommand is the executable md looks for.
@@ -45,6 +47,9 @@ type Tool struct {
 	// cold run starts a browser per diagram, which takes seconds, so the caller
 	// can say what the wait is for.
 	OnFirstRun func()
+	// Progress, if set, is told about each diagram as it is drawn. See Progress
+	// for the order the events arrive in.
+	Progress func(Progress)
 
 	firstRun  sync.Once
 	version   string
@@ -86,21 +91,49 @@ func (t *Tool) Failures() []error {
 	return out
 }
 
+// Progress is one step in drawing a document's diagrams.
+//
+// A diagram that has to be drawn is reported twice, once as it starts and once
+// as it finishes, so a caller can show a diagram that is taking a while. A
+// diagram that came from the cache is reported once, with Cached set: reporting
+// the instant round trip twice would double the noise for no information.
+type Progress struct {
+	// Index is the diagram's position in the batch, counting from one.
+	Index, Total int
+	// Label names the diagram, such as "graph TD".
+	Label string
+	// Started is true as a diagram begins to be drawn, and false as it ends.
+	Started bool
+	// Cached is set when the diagram came from the cache, in which case this is
+	// the only event for it.
+	Cached bool
+	// Took is how long a diagram that had to be drawn took.
+	Took time.Duration
+	// Err is why a diagram could not be drawn.
+	Err error
+}
+
 // Diagram renders one diagram to SVG, from the cache when it is there.
 func (t *Tool) Diagram(ctx context.Context, source string) ([]byte, error) {
+	svg, _, err := t.diagram(ctx, source)
+	return svg, err
+}
+
+// diagram renders one diagram, saying whether the cache answered.
+func (t *Tool) diagram(ctx context.Context, source string) (svg []byte, cached bool, err error) {
 	key, err := t.key(ctx, source)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if svg, ok := readCache(t.CacheDir, key); ok {
-		return svg, nil
+		return svg, true, nil
 	}
-	svg, err := t.run(ctx, source)
+	svg, err = t.run(ctx, source)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	writeCache(t.CacheDir, key, svg)
-	return svg, nil
+	return svg, false, nil
 }
 
 // Diagrams renders several diagrams, bounding how many run at once: each mmdc
@@ -139,16 +172,67 @@ func (t *Tool) Diagrams(ctx context.Context, sources []string) [][]byte {
 				if i >= len(sources) {
 					return
 				}
-				svg, err := t.Diagram(ctx, sources[i])
-				if err != nil {
-					t.noteFailure(err)
-				}
-				out[i] = svg
+				t.draw(ctx, i, sources[i], out)
 			}
 		}()
 	}
 	wg.Wait()
 	return out
+}
+
+// draw renders one diagram of a batch and reports on it.
+func (t *Tool) draw(ctx context.Context, i int, source string, out [][]byte) {
+	event := Progress{Index: i + 1, Total: len(out), Label: label(source), Started: true}
+
+	start := time.Now()
+	svg, cached, err := t.diagram(ctx, source)
+	if err != nil {
+		t.noteFailure(err)
+	}
+	out[i] = svg
+
+	if t.Progress == nil {
+		return
+	}
+	if cached {
+		t.Progress(Progress{Index: event.Index, Total: event.Total, Label: event.Label, Cached: true})
+		return
+	}
+	t.Progress(event)
+	done := event
+	done.Started, done.Took, done.Err = false, time.Since(start), err
+	t.Progress(done)
+}
+
+// label names a diagram for a progress line: the first line of substance, which
+// is the diagram type and often its title.
+func label(source string) string {
+	for _, line := range strings.Split(source, "\n") {
+		line = collapseSpace(line)
+		if line == "" || strings.HasPrefix(line, "%%") {
+			continue
+		}
+		return shorten(line, 40)
+	}
+	return "diagram"
+}
+
+// shorten trims a label to a sensible length for a progress line.
+func shorten(s string, cells int) string {
+	if xansi.StringWidth(s) <= cells {
+		return s
+	}
+	out := make([]rune, 0, cells)
+	width := 0
+	for _, r := range s {
+		w := xansi.StringWidth(string(r))
+		if width+w > cells-1 {
+			break
+		}
+		out = append(out, r)
+		width += w
+	}
+	return string(out) + "…"
 }
 
 func (t *Tool) noteFailure(err error) {
@@ -190,6 +274,10 @@ func (t *Tool) run(ctx context.Context, source string) ([]byte, error) {
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	cmd.Stdout = nil
+	// mmdc starts a browser, and a browser can outlive its parent: without this
+	// a timeout would be cancelled and then wait for the browser to let go of
+	// the pipe.
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("rendering the diagram took longer than %s", timeout)
