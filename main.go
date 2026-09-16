@@ -13,6 +13,7 @@ import (
 
 	xterm "github.com/charmbracelet/x/term"
 
+	"github.com/pftylr/md/internal/cache"
 	"github.com/pftylr/md/internal/config"
 	mdmermaid "github.com/pftylr/md/internal/mermaid"
 	"github.com/pftylr/md/internal/pager"
@@ -40,8 +41,8 @@ options:
       --no-color       disable colour (also honours NO_COLOR)
       --color          force colour even when output is not a terminal
       --no-probe       do not query the terminal for its palette
-      --refresh-palette
-                       ignore the cached palette and query again
+      --refresh-palette    ignore the cached palette and query again
+      --clear-cache        remove the cached palette and diagrams
       --version        print the version and exit
   -h, --help           print this help
 
@@ -73,18 +74,19 @@ func run() error {
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usageText) }
 
 	var (
-		width     = cfg.Width
-		maxWidth  = cfg.MaxWidth
-		themeName = cfg.Theme
-		pagerMode = cfg.Pager
-		mermaid   = cfg.Mermaid
-		links     = cfg.Links
-		ascii     = cfg.Ascii
-		noColor   = cfg.NoColor
-		noProbe   = cfg.NoProbe
-		forceCol  = false
-		refresh   = false
-		showVer   = false
+		width      = cfg.Width
+		maxWidth   = cfg.MaxWidth
+		themeName  = cfg.Theme
+		pagerMode  = cfg.Pager
+		mermaid    = cfg.Mermaid
+		links      = cfg.Links
+		ascii      = cfg.Ascii
+		noColor    = cfg.NoColor
+		noProbe    = cfg.NoProbe
+		forceCol   = false
+		refresh    = false
+		clearCache = false
+		showVer    = false
 	)
 	fs.IntVar(&width, "width", width, "render width in columns")
 	fs.IntVar(&width, "w", width, "render width in columns")
@@ -98,6 +100,7 @@ func run() error {
 	fs.BoolVar(&forceCol, "color", false, "force colour even when not a terminal")
 	fs.BoolVar(&noProbe, "no-probe", noProbe, "do not query the terminal palette")
 	fs.BoolVar(&refresh, "refresh-palette", false, "ignore the cached palette")
+	fs.BoolVar(&clearCache, "clear-cache", false, "remove the cached palette and diagrams")
 	fs.BoolVar(&showVer, "version", false, "print the version and exit")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -109,6 +112,23 @@ func run() error {
 	if showVer {
 		fmt.Println("md", version)
 		return nil
+	}
+	if clearCache {
+		// Clearing the cache and rendering go together: the point of clearing is
+		// to see the document drawn afresh, with a palette re-read and diagrams
+		// rendered again.
+		cleared, err := cache.Clear()
+		if err != nil {
+			return fmt.Errorf("clearing the cache: %w", err)
+		}
+		if cleared {
+			fmt.Fprintf(os.Stderr, "md: cleared %s\n", cache.Dir())
+		} else {
+			fmt.Fprintln(os.Stderr, "md: nothing was cached")
+		}
+		if len(fs.Args()) == 0 && !isPiped() {
+			return nil // cleared, and given nothing to render
+		}
 	}
 
 	name, src, err := input(fs.Args())

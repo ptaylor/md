@@ -60,7 +60,8 @@ pipe, so `cat notes.md | md` and `md < notes.md` both work.
 | `--no-color` | off | disable colour (also honours `NO_COLOR`) |
 | `--color` | off | force colour even when output is not a terminal |
 | `--no-probe` | off | do not query the terminal for its palette |
-| `--refresh-palette` | off | ignore the cached palette and query again |
+| `--refresh-palette` | off | ignore the cached palette and query the terminal again |
+| `--clear-cache` | off | remove the cached palette and diagrams |
 | `--version` | | print the version |
 | `-h`, `--help` | | print help |
 
@@ -89,6 +90,12 @@ Set `--pager less` (or `MD_PAGER`, `PAGER`) to use your own pager instead:
 16 ANSI slots, OSC 10 and 11 for the default foreground and background) and
 renders with the exact colours it is given. That result is cached for an hour, so
 the query costs nothing after the first run.
+
+Both caches — the palette and the diagrams — live in one directory:
+`$XDG_CACHE_HOME/md` when that variable is set, and otherwise the directory the
+platform designates for cache files, which is `~/Library/Caches/md` on macOS and
+`~/.cache/md` on Linux. `--clear-cache` empties it, with or without a document
+to render.
 
 If the terminal does not answer — Apple Terminal does not implement these queries
 — `md` refers to the ANSI slots by index instead, and the terminal paints them
@@ -171,10 +178,11 @@ reads that geometry back out of the SVG and draws it itself. So a diagram is
 text, in the terminal's own colours, and it scrolls with the rest of the
 document - none of which an image inside a pager can do.
 
-The SVG `mmdc` produces is cached under the user's cache directory, keyed by the
-diagram and the version of `mmdc`. Drawing a diagram means starting a browser,
-about two seconds per diagram, so the first read of a document is slow and every
-read after it is instant.
+The SVG `mmdc` produces is cached next to the palette, keyed by the diagram and
+the version of `mmdc` — so upgrading `mmdc` redraws rather than showing a stale
+picture. Drawing a diagram means starting a browser, about two seconds per
+diagram, so the first read of a document is slow and every read after it is
+instant. `--clear-cache` throws it away.
 
 What `md` will not do is draw a diagram it cannot draw properly. A diagram with
 a node it cannot read, or one that will not fit the width available, is shown as

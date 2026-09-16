@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/pftylr/md/internal/cache"
 	"time"
 
 	xansi "github.com/charmbracelet/x/ansi"
@@ -256,11 +258,7 @@ type cachedPalette struct {
 }
 
 func cachePath() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "md", "palette.json")
+	return cache.PalettePath()
 }
 
 func loadCached(key string) (ProbeResult, bool) {

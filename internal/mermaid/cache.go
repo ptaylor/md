@@ -3,19 +3,17 @@ package mermaid
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/pftylr/md/internal/cache"
 )
 
 // cacheDir returns where the diagram cache lives: alongside the palette probe's
-// findings, under the user's cache directory.
+// findings, under the directory md keeps its caches in.
 func cacheDir(override string) string {
 	if override != "" {
 		return override
 	}
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "md", "diagrams")
+	return cache.DiagramsDir()
 }
 
 // cachePath returns the file for a key, or "" when caching is impossible.
