@@ -156,12 +156,12 @@ func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii bool) render.Diagra
 	if !tool.Available() {
 		return nil
 	}
-	// A cold run starts a browser per diagram, which takes seconds: say so, on
-	// stderr, so that a slow first read is not a mystery. stdout stays a
-	// document.
+	// A cold run starts a browser per diagram, which takes seconds: say so, and
+	// say how to skip it, on stderr - stdout stays a document.
 	if xterm.IsTerminal(os.Stderr.Fd()) {
 		tool.OnFirstRun = func() {
-			fmt.Fprintln(os.Stderr, "md: drawing diagrams with mmdc (slow the first time; cached afterwards)")
+			fmt.Fprintln(os.Stderr, "md: drawing diagrams with mmdc - slow the first time, cached after that")
+			fmt.Fprintln(os.Stderr, "md: pass --mermaid box (show the source) or --mermaid off (treat it as code) to skip it")
 		}
 	}
 	diagrams := render.NewDiagrams(tool, caps.Palette, ascii)
