@@ -88,6 +88,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "G", "end":
 			m.vp.GotoBottom()
 			return m, nil
+		case "enter", "ctrl+j":
+			// Return advances a line: the first key anyone presses in a pager,
+			// and the one the viewport's key map leaves unbound. A line feed is
+			// the same key to a terminal that has translated return into
+			// newline, so ctrl+j comes with it, as it does in less.
+			m.vp.ScrollDown(1)
+			return m, nil
 		}
 	}
 
@@ -185,7 +192,7 @@ func (m *model) statusBar() string {
 }
 
 func (m *model) helpLine() string {
-	keys := "  j/k scroll · space/b page · d/u half · g/G ends · ? help · q quit"
+	keys := "  j/k/enter scroll · space/b page · d/u half · g/G ends · ? help · q quit"
 	return m.statusStyle().Width(m.width).Render(xansi.Truncate(keys, m.width, "…"))
 }
 

@@ -119,6 +119,33 @@ func TestScrollKeys(t *testing.T) {
 	}
 }
 
+// TestReturnScrollsALine covers the key most readers press first: return advances
+// a line, the way it does in less. The viewport's own key map leaves it unbound,
+// so without this the key did nothing at all.
+func TestReturnScrollsALine(t *testing.T) {
+	m := newModel(testOptions(nil))
+
+	press(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if got := m.vp.YOffset(); got != 1 {
+		t.Errorf("after enter: offset = %d, want 1", got)
+	}
+
+	// A line feed is what a terminal sends for return once it has translated it
+	// into a newline, so ctrl+j has to do the same.
+	press(t, m, tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
+	if got := m.vp.YOffset(); got != 2 {
+		t.Errorf("after ctrl+j: offset = %d, want 2", got)
+	}
+
+	// At the end of the document there is nowhere to go, and pressing it must
+	// not scroll past the end.
+	press(t, m, tea.KeyPressMsg{Code: 'G', Text: "G"})
+	press(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if got, want := m.vp.YOffset(), m.vp.TotalLineCount()-m.vp.Height(); got != want {
+		t.Errorf("after enter at the end: offset = %d, want %d", got, want)
+	}
+}
+
 func TestQuitKeys(t *testing.T) {
 	for _, key := range []tea.KeyPressMsg{
 		{Code: 'q', Text: "q"},

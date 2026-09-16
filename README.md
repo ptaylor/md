@@ -74,6 +74,7 @@ so `md --color README.md | less -R` works.
 | Key | Action |
 | --- | ------ |
 | `j` / `k`, `↓` / `↑` | scroll a line |
+| `enter`, `ctrl-j` | scroll down a line |
 | `space`, `f`, `pgdn` / `b`, `pgup` | scroll a page |
 | `d`, `ctrl-d` / `u`, `ctrl-u` | scroll half a page |
 | `g`, `home` / `G`, `end` | jump to the top or bottom |
