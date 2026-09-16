@@ -23,6 +23,11 @@ const DefaultCommand = "mmdc"
 // browser, which takes a couple of seconds when it goes well.
 const DefaultTimeout = 30 * time.Second
 
+// errTimeout marks a rendering that ran out of time, as opposed to one mmdc
+// refused. The difference matters: a refusal is worth remembering, a timeout is
+// not.
+var errTimeout = errors.New("timed out")
+
 // ErrNoTool reports that mmdc is not on the PATH.
 var ErrNoTool = errors.New("mmdc is not installed")
 
@@ -30,8 +35,14 @@ var ErrNoTool = errors.New("mmdc is not installed")
 //
 // The SVG is what is cached, not the drawing: the drawing depends on the width
 // of the terminal and the colours in use, while the SVG depends only on the
-// diagram and the version of mmdc. Caching the SVG means a terminal resize costs
-// nothing, and a document read a second time draws instantly.
+// diagram. Caching the SVG means a terminal resize costs nothing, and a document
+// read a second time draws instantly.
+//
+// A cached diagram is kept until mmdc itself changes: the entry's timestamp is
+// compared with the executable's, so an upgrade redraws rather than serving a
+// stale picture. Asking mmdc for its version would say the same thing more
+// precisely, and cost a process spawn on every run - four hundred milliseconds of
+// browser runtime startup - which is not worth it.
 type Tool struct {
 	// Command is the executable to run, and defaults to mmdc.
 	Command string
@@ -51,9 +62,12 @@ type Tool struct {
 	// for the order the events arrive in.
 	Progress func(Progress)
 
-	firstRun  sync.Once
-	version   string
-	versionMu sync.Mutex
+	firstRun sync.Once
+	// path is the resolved mmdc executable, and resolvedAt is when it was last
+	// looked up, so that a long run notices a reinstall.
+	pathOnce sync.Once
+	path     string
+	pathErr  error
 	// failures counts diagrams mmdc could not render, so the caller can mention
 	// it once rather than once per fence.
 	failureMu sync.Mutex
@@ -74,12 +88,17 @@ func (t *Tool) cmd() string {
 	return DefaultCommand
 }
 
+// lookPath resolves the mmdc executable, once.
 func (t *Tool) lookPath() (string, error) {
-	path, err := exec.LookPath(t.cmd())
-	if err != nil {
-		return "", fmt.Errorf("%w: %s", ErrNoTool, t.cmd())
-	}
-	return path, nil
+	t.pathOnce.Do(func() {
+		path, err := exec.LookPath(t.cmd())
+		if err != nil {
+			t.pathErr = fmt.Errorf("%w: %s", ErrNoTool, t.cmd())
+			return
+		}
+		t.path = path
+	})
+	return t.path, t.pathErr
 }
 
 // Failures returns the diagrams that could not be rendered, once each.
@@ -120,20 +139,48 @@ func (t *Tool) Diagram(ctx context.Context, source string) ([]byte, error) {
 }
 
 // diagram renders one diagram, saying whether the cache answered.
+//
+// Both outcomes are cached. A diagram mmdc refuses is refused in the same way
+// every time, and finding that out costs a browser launch, so remembering the
+// refusal saves a second or so on every read of the document. Editing the
+// diagram changes its key, and upgrading mmdc expires the entry, so a refusal is
+// never permanent.
 func (t *Tool) diagram(ctx context.Context, source string) (svg []byte, cached bool, err error) {
-	key, err := t.key(ctx, source)
-	if err != nil {
-		return nil, false, err
+	toolPath, pathErr := t.lookPath()
+	key := t.key(source)
+	entry := cachePath(t.CacheDir, key)
+
+	if data, ok := readIfFresh(entry, toolPath); ok {
+		return data, true, nil
 	}
-	if svg, ok := readCache(t.CacheDir, key); ok {
-		return svg, true, nil
+	if msg, ok := readIfFresh(entry+failureSuffix, toolPath); ok {
+		return nil, true, errors.New(string(msg))
 	}
+	if pathErr != nil {
+		return nil, false, pathErr
+	}
+
 	svg, err = t.run(ctx, source)
 	if err != nil {
+		// A timeout says nothing about the diagram: the machine was busy. Keep
+		// the question open rather than remembering a refusal that may have been
+		// about something else entirely.
+		if !errors.Is(err, errTimeout) {
+			writeFile(entry+failureSuffix, []byte(err.Error()))
+			removeFile(entry)
+		}
 		return nil, false, err
 	}
-	writeCache(t.CacheDir, key, svg)
+	removeFile(entry + failureSuffix)
+	writeFile(entry, svg)
 	return svg, false, nil
+}
+
+// key is the cache key for a diagram. It is the diagram alone: whether the entry
+// is still good is decided by timestamps, not by asking mmdc anything.
+func (t *Tool) key(source string) string {
+	sum := sha256.Sum256([]byte(cacheVersion + "\x00" + source))
+	return hex.EncodeToString(sum[:])
 }
 
 // Diagrams renders several diagrams, bounding how many run at once: each mmdc
@@ -195,7 +242,12 @@ func (t *Tool) draw(ctx context.Context, i int, source string, out [][]byte) {
 		return
 	}
 	if cached {
-		t.Progress(Progress{Index: event.Index, Total: event.Total, Label: event.Label, Cached: true})
+		// A refusal is cached too, and has to arrive as a failure as well, or
+		// the reader would be told nothing about the diagram that is missing.
+		t.Progress(Progress{
+			Index: event.Index, Total: event.Total, Label: event.Label,
+			Cached: true, Err: err,
+		})
 		return
 	}
 	t.Progress(event)
@@ -280,7 +332,7 @@ func (t *Tool) run(ctx context.Context, source string) ([]byte, error) {
 	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("rendering the diagram took longer than %s", timeout)
+			return nil, fmt.Errorf("%w after %s", errTimeout, timeout)
 		}
 		return nil, fmt.Errorf("rendering the diagram: %w: %s",
 			err, firstLine(stderr.String()))
@@ -293,37 +345,6 @@ func (t *Tool) run(ctx context.Context, source string) ([]byte, error) {
 }
 
 // key is the cache key for a diagram: the diagram itself and the version of
-// mmdc that would draw it, so an upgrade does not leave stale pictures behind.
-func (t *Tool) key(ctx context.Context, source string) (string, error) {
-	version, err := t.mmdcVersion(ctx)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256([]byte("md-mermaid-1\x00" + version + "\x00" + source))
-	return hex.EncodeToString(sum[:]), nil
-}
-
-// mmdcVersion asks mmdc for its version, once per run.
-func (t *Tool) mmdcVersion(ctx context.Context) (string, error) {
-	t.versionMu.Lock()
-	defer t.versionMu.Unlock()
-	if t.version != "" {
-		return t.version, nil
-	}
-	path, err := t.lookPath()
-	if err != nil {
-		return "", err
-	}
-	out, err := exec.CommandContext(ctx, path, "--version").Output()
-	if err != nil {
-		// An unknown version is not a reason to refuse to draw; it only makes
-		// the cache key less precise.
-		t.version = "unknown"
-		return t.version, nil
-	}
-	t.version = strings.TrimSpace(string(out))
-	return t.version, nil
-}
 
 func firstLine(s string) string {
 	for _, line := range strings.Split(s, "\n") {

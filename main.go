@@ -208,12 +208,18 @@ func mermaidDiagrams(mode, cmd string, caps term.Caps, ascii, showProgress bool)
 func reportDiagramProgress(p mdmermaid.Progress) {
 	prefix := fmt.Sprintf("md: %2d/%-2d %-42s ", p.Index, p.Total, p.Label)
 	switch {
+	case p.Err != nil:
+		// A refusal that was remembered costs nothing to report, so say that
+		// rather than letting it look like work.
+		remembered := ""
+		if p.Cached {
+			remembered = " (remembered)"
+		}
+		fmt.Fprintln(os.Stderr, prefix+"failed: "+firstLine(p.Err.Error())+remembered)
 	case p.Cached:
 		fmt.Fprintln(os.Stderr, prefix+"cached")
 	case p.Started:
 		fmt.Fprintln(os.Stderr, prefix+"drawing...")
-	case p.Err != nil:
-		fmt.Fprintln(os.Stderr, prefix+"failed: "+firstLine(p.Err.Error()))
 	default:
 		fmt.Fprintf(os.Stderr, "%sdrawn in %s\n", prefix, p.Took.Round(time.Millisecond))
 	}

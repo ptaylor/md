@@ -178,11 +178,21 @@ reads that geometry back out of the SVG and draws it itself. So a diagram is
 text, in the terminal's own colours, and it scrolls with the rest of the
 document - none of which an image inside a pager can do.
 
-The SVG `mmdc` produces is cached next to the palette, keyed by the diagram and
-the version of `mmdc` — so upgrading `mmdc` redraws rather than showing a stale
-picture. Drawing a diagram means starting a browser, about two seconds per
-diagram, so the first read of a document is slow and every read after it is
-instant. `--clear-cache` throws it away.
+The SVG `mmdc` produces is cached next to the palette, keyed by the diagram, and
+kept until `mmdc` itself changes: an entry is aged against the executable's
+timestamp, so upgrading `mmdc` redraws rather than showing a stale picture.
+Asking `mmdc` for its version would say the same thing more precisely, and cost a
+process spawn on every run — four hundred milliseconds of browser runtime
+startup — so `md` compares timestamps instead.
+
+A diagram `mmdc` refuses is remembered as well, so a fence it cannot draw costs
+nothing after the first read: the drawing is not attempted again. Editing the
+diagram, or upgrading `mmdc`, asks again. A timeout is not treated as a refusal,
+because a machine being busy says nothing about the diagram.
+
+Drawing a diagram means starting a browser, about two seconds per diagram, so the
+first read of a document is slow and every read after it is instant.
+`--clear-cache` throws it away.
 
 What `md` will not do is draw a diagram it cannot draw properly. A diagram with
 a node it cannot read, or one that will not fit the width available, is shown as
