@@ -45,11 +45,14 @@ this order.
 ## 3. Format and tidy before committing
 
 ```sh
-goimports -l -w .   # gofmt, with the import block fixed as well
+goimports -local github.com/pftylr/md -l -w .
 go vet ./...
 ```
 
-`gofmt -l .` must print nothing. If `goimports` is not installed:
+`-local` keeps this module's own imports in a group of their own, after the
+third-party ones, which is how every file here is laid out. `goimports` does not
+merge groups that are already there, so an import that has strayed needs moving
+by hand. `gofmt -l .` must print nothing. If `goimports` is not installed:
 
 ```sh
 go install golang.org/x/tools/cmd/goimports@latest

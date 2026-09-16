@@ -10,13 +10,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/pftylr/md/internal/cache"
 	"time"
 
 	xansi "github.com/charmbracelet/x/ansi"
 	xterm "github.com/charmbracelet/x/term"
 
+	"github.com/pftylr/md/internal/cache"
 	"github.com/pftylr/md/internal/theme"
 )
 
