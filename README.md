@@ -78,12 +78,32 @@ so `md --color README.md | less -R` works.
 | `space`, `f`, `pgdn` / `b`, `pgup` | scroll a page |
 | `d`, `ctrl-d` / `u`, `ctrl-u` | scroll half a page |
 | `g`, `home` / `G`, `end` | jump to the top or bottom |
+| `/` | search forwards |
+| `n` / `N` | next / previous match |
 | mouse wheel | scroll |
 | `?` | toggle the help line |
 | `q`, `esc`, `ctrl-c` | quit |
 
 Set `--pager less` (or `MD_PAGER`, `PAGER`) to use your own pager instead:
 `md` checks `$MD_PAGER`, then `$PAGER`, then falls back to `less -R`.
+
+### Search
+
+`/` opens a prompt at the bottom of the screen: type a string and press `enter`.
+The string is taken literally, so what you type is what is looked for rather than
+a pattern, and the case is ignored. The search starts from the top line of the
+screen and takes you to the hit it finds, marking the matches as you go; `n` and
+`N` step forwards and backwards through them.
+
+Running off the end wraps to the top and says so, so a search either finds
+something or tells you it did not. `esc` closes the prompt without searching, and
+`enter` with nothing typed calls the search off and takes the marks away.
+
+What marks a match is reverse video, and underline for the one in hand. Those are
+attributes rather than colours, so they read on any theme and leave the syntax
+colours underneath them alone. They are also attributes `md`'s own output does not
+lean on: it never sets reverse video, and its underlined links carry a colour in
+the same sequence, so undoing a mark cannot take anything off the document.
 
 ## How the colours work
 
