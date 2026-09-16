@@ -169,7 +169,12 @@ echo run >> "$MMDC_CALLS"
 while [ ! -f "$MMDC_RELEASE" ]; do sleep 0.05; done
 `)
 	tool, calls := newTool(t)
-	tool.Timeout = 400 * time.Millisecond
+	// A second, not four hundred milliseconds: the point of the test is what md
+	// does with a timeout, and the stub is killed at whatever the timeout is. If
+	// the timeout were tight enough for a shell that is slow to start - which a
+	// busy machine makes happen - the stub could be killed before it recorded
+	// its call, and the test would be measuring the machine rather than md.
+	tool.Timeout = time.Second
 
 	tool.Diagrams(context.Background(), []string{"graph TD\n  A --> B"})
 	tool.Diagrams(context.Background(), []string{"graph TD\n  A --> B"})
