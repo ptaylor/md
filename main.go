@@ -17,6 +17,7 @@ import (
 	"github.com/pftylr/md/internal/config"
 	mdmermaid "github.com/pftylr/md/internal/mermaid"
 	"github.com/pftylr/md/internal/pager"
+	"github.com/pftylr/md/internal/pick"
 	"github.com/pftylr/md/internal/render"
 	"github.com/pftylr/md/internal/term"
 )
@@ -28,6 +29,7 @@ const usageText = `md - render Markdown in the terminal
 
 usage:
   md [options] FILE.md
+  md [options] DIRECTORY    choose a Markdown file from one
   md [options] -            read from standard input
 
 options:
@@ -50,6 +52,14 @@ keys (built-in pager):
   j/k, up/down         line up and down        space/b, pgdn/pgup   page down and up
   d/u, ctrl-d/ctrl-u   half page down and up   g/G, home/end        top and bottom
   q, esc, ctrl-c       quit                    ?                    toggle help
+  /                    search                  n/N                  next/previous hit
+
+keys (a directory):
+  up/down, j/k         choose                  enter                read the file
+  q, esc, ctrl-c       leave the list
+
+With a directory and no terminal to choose on - piped, or with --pager=none - md
+lists the Markdown files it found instead of asking.
 
 md matches the colours you already use: it reads the terminal's own 16 colour
 slots and background, and falls back to referring to those slots by index on
@@ -131,9 +141,17 @@ func run() error {
 		}
 	}
 
-	name, src, err := input(fs.Args())
-	if err != nil {
-		return err
+	// A directory is the one argument that is not a document: md offers the
+	// Markdown files in it and lets the reader choose. Its files are not read yet,
+	// because the choice needs the terminal, and asking the terminal anything has
+	// to wait until standard input has been drained.
+	dir := directory(fs.Args())
+	var name, src string
+	if dir == "" {
+		var err error
+		if name, src, err = input(fs.Args()); err != nil {
+			return err
+		}
 	}
 
 	caps := term.Detect(term.Options{
@@ -161,11 +179,86 @@ func run() error {
 		Diagrams: diagrams,
 	})
 
+	if dir != "" {
+		return browse(rend, caps, pagerMode, dir)
+	}
+
 	content, err := rend.Render(src, caps.Width)
 	if err != nil {
 		return err
 	}
-	return display(rend, caps, pagerMode, name, content)
+	return display(caps, pagerMode, name, content, fromSource(rend, src), false)
+}
+
+// directory reports the directory md has been pointed at, if it has been.
+//
+// A directory is a place to choose a document in rather than a document, and it is
+// the only argument that is not read as one. A path that cannot be read at all is
+// left to input, which says what is wrong with it.
+func directory(args []string) string {
+	if len(args) != 1 || args[0] == "-" {
+		return ""
+	}
+	if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+		return args[0]
+	}
+	return ""
+}
+
+// browse offers the Markdown files of a directory, and shows the one chosen.
+//
+// Reading a document returns to the list, so that several can be read in a row,
+// and leaving the list is how md ends. Nothing can be chosen without a terminal,
+// or with the pager switched off: then md lists what it found, which is useful on
+// its own and is not a failure.
+func browse(rend *render.Renderer, caps term.Caps, mode, dir string) error {
+	files, err := pick.Files(dir)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no Markdown files in %s", dir)
+	}
+	if !caps.IsTTY || mode == "none" {
+		_, err := fmt.Fprintln(caps.Out, strings.Join(files, "\n"))
+		return err
+	}
+
+	for {
+		chosen, err := pick.Show(pick.Options{
+			Dir:     dir,
+			Files:   files,
+			Width:   caps.Width,
+			Height:  caps.Height,
+			Palette: caps.Palette,
+		})
+		if errors.Is(err, pick.ErrCancelled) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		src, err := os.ReadFile(chosen) //nolint:gosec // a path the reader chose
+		if err != nil {
+			return err
+		}
+		content, err := rend.Render(string(src), caps.Width)
+		if err != nil {
+			return err
+		}
+		err = display(caps, mode, filepath.Base(chosen), content, fromSource(rend, string(src)), true)
+		if errors.Is(err, pager.ErrBack) {
+			continue
+		}
+		return err
+	}
+}
+
+// fromSource re-renders a document from its source, which is what resizing needs:
+// what is on screen is markdown's output, not markdown.
+func fromSource(rend *render.Renderer, src string) func(width int) (string, error) {
+	return func(width int) (string, error) { return rend.Render(src, width) }
 }
 
 // mermaidDiagrams returns the diagram drawer for the chosen mode, or nil when
@@ -253,7 +346,15 @@ func reportDiagramFailures(d *render.Diagrams) {
 	fmt.Fprintf(os.Stderr, "md: %d diagram(s) could not be drawn, showing source: %v\n",
 		len(failures), failures[0])
 }
-func display(rend *render.Renderer, caps term.Caps, mode, name, content string) error {
+
+// display shows a rendered document, with the pager when the terminal can take
+// one.
+//
+// rerender renders the document again at a new width, for a resize. back is set
+// when the document was chosen from a list, so that leaving it returns to that
+// list instead of ending md - and ErrBack is passed on to the caller rather than
+// treated as a pager that failed to start.
+func display(caps term.Caps, mode, name, content string, rerender func(int) (string, error), back bool) error {
 	if !caps.IsTTY {
 		// Piped or redirected: no pager, and the writer strips colour unless
 		// the user forced it.
@@ -273,12 +374,11 @@ func display(rend *render.Renderer, caps term.Caps, mode, name, content string) 
 		Width:   caps.Width,
 		Height:  caps.Height,
 		Palette: caps.Palette,
-		Render: func(width int) (string, error) {
-			return rend.Render(content, width)
-		},
+		Render:  rerender,
+		Back:    back,
 	})
-	if err == nil {
-		return nil
+	if err == nil || errors.Is(err, pager.ErrBack) {
+		return err
 	}
 	// The interactive pager could not start; fall back rather than lose the
 	// document.

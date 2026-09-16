@@ -42,6 +42,7 @@ the version and explains what to do if it is too old.
 
 ```
 md [options] FILE.md
+md [options] DIRECTORY    choose a Markdown file from one
 md [options] -            read from standard input
 ```
 
@@ -68,6 +69,26 @@ pipe, so `cat notes.md | md` and `md < notes.md` both work.
 When the output is not a terminal (a pipe or a redirect) `md` prints the
 document without colour instead of starting the pager. `--color` overrides that,
 so `md --color README.md | less -R` works.
+
+### Choosing a file
+
+Point `md` at a directory rather than a document and it offers the Markdown
+files in it:
+
+```sh
+md .
+```
+
+The files are listed by name, matching `.md` whatever the case of the
+extension, and subdirectories are not descended into. `↑`/`↓`, or `j`/`k`,
+move; `enter` reads the file; `q` leaves the list. After reading, `q` returns
+to the list, so a directory is somewhere you can browse rather than a choice
+you make once. The last row names the directory, where you are in the list, and
+the keys.
+
+With no terminal to choose on - the output piped or redirected, or
+`--pager=none` - `md` prints the list instead of asking, which is useful on its
+own. A directory holding no Markdown files is reported rather than shown empty.
 
 ### Keys
 

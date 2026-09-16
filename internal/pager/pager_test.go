@@ -1,6 +1,7 @@
 package pager
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -410,13 +411,47 @@ func TestResizeKeepsTheSearch(t *testing.T) {
 // help line is truncated to the terminal, so a key that does not fit the width of
 // an ordinary terminal is a key nobody knows about.
 func TestHelpLineFitsAnOrdinaryTerminal(t *testing.T) {
-	if got := xansi.StringWidth(helpKeys); got > 80 {
-		t.Errorf("the help line is %d cells, which does not fit an eighty column terminal: %q", got, helpKeys)
+	for _, keys := range []string{helpKeys, helpKeysBack} {
+		if got := xansi.StringWidth(keys); got > 80 {
+			t.Errorf("the help line is %d cells, which does not fit an eighty column terminal: %q", got, keys)
+		}
 	}
-	for _, want := range []string{"/", "search", "n/N", "q quit"} {
+	for _, want := range []string{"/", "search", "n/N", "q "} {
 		if !strings.Contains(helpKeys, want) {
 			t.Errorf("the help line does not mention %q: %q", want, helpKeys)
 		}
+	}
+}
+
+// TestQuittingWithBackLeavesTheDocumentToList checks the way out of a document
+// that was chosen from a list: the keys that quit ask for the list back, and say
+// so in the help line, rather than ending md.
+func TestQuittingWithBackLeavesTheDocumentToList(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{
+		{Code: 'q', Text: "q"},
+		{Code: tea.KeyEscape},
+		{Code: 'c', Mod: tea.ModCtrl},
+	} {
+		o := testOptions(nil)
+		o.Back = true
+		m := newModel(o)
+		if got := m.outcome(); got != nil {
+			t.Fatalf("before any key: outcome = %v, want nil", got)
+		}
+		press(t, m, key)
+		if got := m.outcome(); !errors.Is(got, ErrBack) {
+			t.Errorf("key %q: outcome = %v, want ErrBack", key.String(), got)
+		}
+		if got := xansi.Strip(m.helpLine()); !strings.Contains(got, "q back") {
+			t.Errorf("key %q: the help line does not offer the way back:\n%s", key.String(), got)
+		}
+	}
+
+	// And without Back, quitting means quitting.
+	m := newModel(testOptions(nil))
+	press(t, m, tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if got := m.outcome(); got != nil {
+		t.Errorf("quitting an ordinary document: outcome = %v, want nil", got)
 	}
 }
 

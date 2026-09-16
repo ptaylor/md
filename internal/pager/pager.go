@@ -3,6 +3,7 @@
 package pager
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -14,6 +15,11 @@ import (
 
 	"github.com/pftylr/md/internal/theme"
 )
+
+// ErrBack reports that the reader left the pager in the mode where quitting goes
+// back to whatever offered the document - a list of files, say - rather than
+// ending md.
+var ErrBack = errors.New("back")
 
 // Options configure the pager.
 type Options struct {
@@ -29,12 +35,26 @@ type Options struct {
 	// terminal re-flows the text instead of leaving it wrapped for the old
 	// width.
 	Render func(width int) (string, error)
+	// Back makes the keys that leave the pager return to what offered the
+	// document instead of ending md, so that a list of files is a place a reader
+	// can come back to.
+	Back bool
 }
 
-// Show runs the pager until the user quits.
+// Show runs the pager until the reader quits.
 func Show(o Options) error {
-	if _, err := tea.NewProgram(newModel(o)).Run(); err != nil {
+	m := newModel(o)
+	if _, err := tea.NewProgram(m).Run(); err != nil {
 		return fmt.Errorf("starting pager: %w", err)
+	}
+	return m.outcome()
+}
+
+// outcome reports how the pager ended: ErrBack when the reader asked to go back to
+// what offered the document, and nil when they simply quit.
+func (m *model) outcome() error {
+	if m.back {
+		return ErrBack
 	}
 	return nil
 }
@@ -71,6 +91,9 @@ type model struct {
 	prompt bool
 	input  string
 	search search
+	// back is set when the reader leaves with Back, which means "go back to what
+	// offered this document" rather than "end md".
+	back bool
 }
 
 func (m *model) Init() tea.Cmd { return nil }
@@ -91,6 +114,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
+			if m.opts.Back {
+				m.back = true
+			}
 			return m, tea.Quit
 		case "?":
 			m.showHelp = !m.showHelp
@@ -315,8 +341,16 @@ func (m *model) statusBar() string {
 // does not fit is a key nobody knows about.
 const helpKeys = "  j/k/enter scroll · space/b page · d/u half · / search · n/N · ? help · q quit"
 
+// helpKeysBack is the same line with the way out named differently: a document
+// opened from a list of files goes back to that list rather than ending md.
+const helpKeysBack = "  j/k/enter scroll · space/b page · d/u half · / search · n/N · ? help · q back"
+
 func (m *model) helpLine() string {
-	return m.statusStyle().Width(m.width).Render(xansi.Truncate(helpKeys, m.width, "…"))
+	keys := helpKeys
+	if m.opts.Back {
+		keys = helpKeysBack
+	}
+	return m.statusStyle().Width(m.width).Render(xansi.Truncate(keys, m.width, "…"))
 }
 
 func (m *model) statusStyle() lipgloss.Style {
